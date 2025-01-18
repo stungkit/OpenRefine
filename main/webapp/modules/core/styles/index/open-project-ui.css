@@ -34,18 +34,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #projects-container {
   background: var(--background-primary);
   overflow: auto;
-  position: absolute;
-  top: 0px;
-  left: 0px;
-  width: 100%;
+  height: 100%;
 }
 
 #projects-workspace-controls {
-  position: absolute;
+  position: fixed;
   padding: var(--padding-normal);
   background: var(--fill-primary);
   border-top: 1px solid var(--chrome-primary);
   font-size: 1.3em;
+  width: 100%;
+  bottom: 0;
 }
 
 #projects-container>table {
@@ -70,6 +69,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #projects-container .project .project-name {
   font-size: 120%;
+  white-space: nowrap;
 }
 
 #projects-container .project .last-modified {
@@ -79,30 +79,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #projects-container .message {
   padding: var(--padding-loose);
   font-size: 170%;
-  line-height: 1.5em;
-  opacity: 0.2;
 }
 
 #projects-container>table thead th:nth-child(1) {
   border: 0;
 }
 
-#projects-container>table thead th:nth-child(2) {
+#projects-container table thead th:nth-child(2) {
   border-left: 0;
 }
 
-#projects-container>table thead th:nth-child(3) {
+#projects-container table thead th:nth-child(3) {
   white-space: nowrap;
 }
 
-/* Name */
-#projects-container>table td:nth-child(4) {
-  white-space: nowrap;
+#projects-container table thead th:nth-child(9) {
+  text-align: end;
 }
 
 /* Subject */
-#projects-container>table td:nth-child(6) {
+#projects-container table tbody td:nth-child(7) {
   white-space: nowrap;
+}
+
+/* Row Count is right aligned for numbers */
+#projects-container table tbody td:nth-child(9) {
+  text-align: end;
 }
 
 #projects-container>table>tbody>tr>td {
@@ -217,4 +219,30 @@ ul#tagsUl li a {
   font-weight: bold;
   background: #28458A;
   color: white;
+}
+
+/* Search bar in open project page */
+
+/* input */
+#search-input {
+  margin: 0px 10px 0px 0px;
+  padding: 4px;
+  float: left;
+  display: none;
+}
+
+/* icon search */
+.magnifying_glass {
+  float: left;
+  width: 20px;
+  height: 20px;
+  border-radius: 100%;
+  padding: 4px;
+}
+
+#no-results-message {
+  color: #777;
+  display: none;
+  text-align: center;
+  font-size: x-large;
 }

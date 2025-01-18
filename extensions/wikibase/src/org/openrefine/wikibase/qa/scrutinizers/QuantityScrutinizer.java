@@ -1,7 +1,10 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.QAWarning;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
 import org.wikidata.wdtk.datamodel.interfaces.ItemIdValue;
 import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
@@ -12,13 +15,11 @@ import org.wikidata.wdtk.datamodel.interfaces.Statement;
 import org.wikidata.wdtk.datamodel.interfaces.Value;
 import org.wikidata.wdtk.datamodel.interfaces.ValueSnak;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import org.openrefine.wikibase.qa.QAWarning;
 
 /**
  * Scrutinizer checking for units and bounds in quantities.
- * 
+ *
  * @author Antonin Delpeuch
  *
  */
@@ -94,7 +95,7 @@ public class QuantityScrutinizer extends SnakScrutinizer {
             if (value.getUnitItemId() != null) {
                 currentUnit = value.getUnitItemId();
             }
-            if (allowedUnits != null &&
+            if (allowedUnits != null && (currentUnit != null || !allowedUnits.isEmpty()) &&
                     !allowedUnits.contains(currentUnit)) {
                 String issueType = currentUnit == null ? noUnitProvidedType : invalidUnitType;
                 QAWarning issue = new QAWarning(issueType, pid.getId(), QAWarning.Severity.IMPORTANT, 1);

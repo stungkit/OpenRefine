@@ -39,6 +39,8 @@ import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.http.HttpHeaders;
+
 import com.google.refine.RefineServlet;
 
 abstract public class HttpHeadersSupport {
@@ -62,9 +64,13 @@ abstract public class HttpHeadersSupport {
     }
 
     static {
-        registerHttpHeader("User-Agent", RefineServlet.FULLNAME);
-        registerHttpHeader("Accept", "*/*");
-        registerHttpHeader("Authorization", "");
+        registerHttpHeader(HttpHeaders.USER_AGENT, RefineServlet.FULLNAME);
+        registerHttpHeader(HttpHeaders.ACCEPT, "*/*");
+        registerHttpHeader(HttpHeaders.AUTHORIZATION, "");
+        registerHttpHeader(HttpHeaders.ACCEPT_CHARSET, "");
+        registerHttpHeader(HttpHeaders.ACCEPT_ENCODING, "");
+        registerHttpHeader(HttpHeaders.ACCEPT_LANGUAGE, "");
+        registerHttpHeader(HttpHeaders.IF_MODIFIED_SINCE, "");
     }
 
     /**

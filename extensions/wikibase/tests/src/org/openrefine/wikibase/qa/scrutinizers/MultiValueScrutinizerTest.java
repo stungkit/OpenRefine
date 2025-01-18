@@ -7,11 +7,6 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.openrefine.wikibase.qa.ConstraintFetcher;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.ItemEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.implementation.StatementImpl;
@@ -20,6 +15,12 @@ import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
 import org.wikidata.wdtk.datamodel.interfaces.Snak;
 import org.wikidata.wdtk.datamodel.interfaces.Statement;
 import org.wikidata.wdtk.datamodel.interfaces.Value;
+
+import org.openrefine.wikibase.qa.ConstraintFetcher;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.ItemEdit;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public class MultiValueScrutinizerTest extends ScrutinizerTest {
 
@@ -47,6 +48,7 @@ public class MultiValueScrutinizerTest extends ScrutinizerTest {
                 .addStatement(add(TestingData.generateStatement(idA, idB)))
                 .addStatement(add(statement1))
                 .addStatement(add(statement2))
+                .addContributingRowId(123)
                 .build();
 
         List<Statement> constraintDefinitions = constraintParameterStatementList(entityIdValue, new ArrayList<>());
@@ -67,9 +69,11 @@ public class MultiValueScrutinizerTest extends ScrutinizerTest {
         ItemEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(TestingData.generateStatement(idA, idB)))
                 .addStatement(add(statement))
+                .addContributingRowId(123)
                 .build();
         ItemEdit updateB = new ItemEditBuilder(idB)
                 .addStatement(add(TestingData.generateStatement(idB, idB)))
+                .addContributingRowId(123)
                 .build();
 
         List<Statement> constraintDefinitions = constraintParameterStatementList(entityIdValue, new ArrayList<>());
@@ -89,9 +93,12 @@ public class MultiValueScrutinizerTest extends ScrutinizerTest {
         Statement statement = new StatementImpl("P1963", mainSnakValue, idA);
         ItemEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(TestingData.generateStatement(idA, idB)))
-                .addStatement(add(statement)).build();
+                .addStatement(add(statement))
+                .addContributingRowId(123)
+                .build();
         ItemEdit updateB = new ItemEditBuilder(idB)
                 .addStatement(add(TestingData.generateStatement(idB, idB)))
+                .addContributingRowId(123)
                 .build();
 
         List<Statement> constraintDefinitions = constraintParameterStatementList(entityIdValue, new ArrayList<>());

@@ -8,6 +8,7 @@ import static org.testng.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.io.StringWriter;
 
 import javax.servlet.ServletException;
@@ -33,20 +34,18 @@ public class EditOneCellCommandTests extends RefineTest {
     protected StringWriter writer = null;
 
     @BeforeMethod
-    public void setUpProject() {
-        project = createCSVProject(
-                "first_column,second_column\n"
-                        + "a,b\n"
-                        + "c,d\n");
+    public void setUpProject() throws IOException {
+        project = createProject(
+                new String[] { "first_column", "second_column" },
+                new Serializable[][] {
+                        { "a", "b" },
+                        { "c", "d" }
+                });
         command = new EditOneCellCommand();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         writer = new StringWriter();
-        try {
-            when(response.getWriter()).thenReturn(new PrintWriter(writer));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        when(response.getWriter()).thenReturn(new PrintWriter(writer));
     }
 
     @Test
@@ -113,6 +112,6 @@ public class EditOneCellCommandTests extends RefineTest {
         command.doPost(request, response);
 
         assertEquals(project.rows.get(1).cells.get(0).value, "c");
-        TestUtils.assertEqualAsJson("{\"code\":\"error\",\"message\":\"Missing or invalid csrf_token parameter\"}", writer.toString());
+        TestUtils.assertEqualsAsJson(writer.toString(), "{\"code\":\"error\",\"message\":\"Missing or invalid csrf_token parameter\"}");
     }
 }

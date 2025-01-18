@@ -32,10 +32,10 @@ package com.google.refine.exporters.sql;
 import java.util.Collections;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.refine.util.JSONUtilities;
 
 public class SqlCreateBuilder {
@@ -51,6 +51,10 @@ public class SqlCreateBuilder {
         this.columns = columns;
         this.options = sqlOptions;
 
+    }
+
+    public static String addQuotes(String columnName) {
+        return "\"" + columnName.replace("\"", "\"\"") + "\"";
     }
 
     public String getCreateSQL() {
@@ -82,9 +86,9 @@ public class SqlCreateBuilder {
                 if (name != null) {
                     if (trimColNames) {
                         String trimmedCol = name.replaceAll("[^a-zA-Z0-9_]", "_");
-                        createSB.append(trimmedCol + " ");
+                        createSB.append(addQuotes(trimmedCol) + " ");
                     } else {
-                        createSB.append(name + " ");
+                        createSB.append(addQuotes(name) + " ");
                     }
 
                     if (type.equals(SqlData.SQL_TYPE_VARCHAR)) {

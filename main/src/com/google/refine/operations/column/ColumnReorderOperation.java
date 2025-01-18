@@ -37,6 +37,8 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.commons.lang.Validate;
+
 import com.google.refine.history.HistoryEntry;
 import com.google.refine.model.AbstractOperation;
 import com.google.refine.model.Project;
@@ -51,6 +53,11 @@ public class ColumnReorderOperation extends AbstractOperation {
     public ColumnReorderOperation(
             @JsonProperty("columnNames") List<String> columnNames) {
         _columnNames = columnNames;
+    }
+
+    @Override
+    public void validate() {
+        Validate.notNull(_columnNames, "Missing column names");
     }
 
     @JsonProperty("columnNames")

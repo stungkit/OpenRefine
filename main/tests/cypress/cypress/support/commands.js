@@ -9,81 +9,9 @@
 // ***********************************************
 
 import 'cypress-file-upload';
-import 'cypress-wait-until';
-
-// /**
-//  * Reconcile a column
-//  * Internally using the "apply" behavior for not having to go through the whole user interface
-//  */
-// Cypress.Commands.add('reconcileColumn', (columnName, autoMatch = true) => {
-//   cy.setPreference(
-//     'reconciliation.standardServices',
-//     encodeURIComponent(
-//       JSON.stringify([
-//         {
-//           name: 'CSV Reconciliation service',
-//           identifierSpace: 'http://localhost:8000/',
-//           schemaSpace: 'http://localhost:8000/',
-//           defaultTypes: [],
-//           view: { url: 'http://localhost:8000/view/{{id}}' },
-//           preview: {
-//             width: 500,
-//             url: 'http://localhost:8000/view/{{id}}',
-//             height: 350,
-//           },
-//           suggest: {
-//             entity: {
-//               service_url: 'http://localhost:8000',
-//               service_path: '/suggest',
-//               flyout_service_url: 'http://localhost:8000',
-//               flyout_sercice_path: '/flyout',
-//             },
-//           },
-//           url: 'http://localhost:8000/reconcile',
-//           ui: { handler: 'ReconStandardServicePanel', access: 'jsonp' },
-//         },
-//       ])
-//     )
-//   ).then(() => {
-//     const apply = [
-//       {
-//         op: 'core/recon',
-//         engineConfig: {
-//           facets: [],
-//           mode: 'row-based',
-//         },
-//         columnName: columnName,
-//         config: {
-//           mode: 'standard-service',
-//           service: 'http://localhost:8000/reconcile',
-//           identifierSpace: 'http://localhost:8000/',
-//           schemaSpace: 'http://localhost:8000/',
-//           type: {
-//             id: '/csv-recon',
-//             name: 'CSV-recon',
-//           },
-//           autoMatch: autoMatch,
-//           columnDetails: [],
-//           limit: 0,
-//         },
-//         description: 'Reconcile cells in column species to type /csv-recon',
-//       },
-//     ];
-//     cy.get('a#or-proj-undoRedo').click();
-//     cy.get('#refine-tabs-history .history-panel-controls')
-//       .contains('Apply')
-//       .click();
-//     cy.get('.dialog-container .history-operation-json').invoke(
-//       'val',
-//       JSON.stringify(apply)
-//     );
-//     cy.get('.dialog-container button[bind="applyButton"]').click();
-//   });
-// });
 
 /**
- * Reconcile a column
- * Internally using the "apply" behavior for not having to go through the whole user interface
+ * Check that a column is reconciled
  */
 Cypress.Commands.add('assertColumnIsReconciled', (columnName) => {
   cy.get(
@@ -118,7 +46,7 @@ Cypress.Commands.add('getNumericFacetContainer', (facetName) => {
 Cypress.Commands.add('editCell', (rowIndex, columnName, value) => {
   cy.getCell(rowIndex, columnName)
     .trigger('mouseover')
-    .find('a.data-table-cell-edit')
+    .find('button.data-table-cell-edit')
     .click();
   cy.get('.menu-container.data-table-cell-editor textarea').type(value);
   cy.get('.menu-container button[bind="okButton"]').click();
@@ -129,7 +57,7 @@ Cypress.Commands.add('editCell', (rowIndex, columnName, value) => {
  */
 Cypress.Commands.add('assertTextareaHaveJsonValue', (selector, json) => {
   cy.get(selector).then((el) => {
-    // expected json needs to be parsed / restringified, to avoid inconsitencies about spaces and tabs
+    // expected json needs to be parsed / restringified, to avoid inconsistencies about spaces and tabs
     const present = JSON.parse(el.val());
     cy.expect(JSON.stringify(present)).to.equal(JSON.stringify(json));
   });
@@ -229,7 +157,7 @@ Cypress.Commands.add('assertGridEquals', (values) => {
   cy.get('table.data-table').should((table) => {
     const headers = Cypress.$('table.data-table th')
       .filter(function (index, element) {
-        return element.innerText != 'All';
+        return element.innerText !== 'All';
       })
       .map(function (index, element) {
         return element.innerText;
@@ -238,14 +166,15 @@ Cypress.Commands.add('assertGridEquals', (values) => {
 
     const cells = Cypress.$('table.data-table tbody tr')
       .map(function (i, el) {
-        return [
-          Cypress.$('td', el)
-            .filter((index) => index > 2)
-            .map(function (index, element) {
-              return element.innerText;
-            })
-            .get(),
-        ];
+        const innerTexts = Cypress.$('td', el).filter(index => index > 2)
+          .map(function (index, element) {
+            return element.querySelector('div.data-table-cell-content div > span').innerText;
+          }).get();
+        return [ innerTexts
+          .map(function (innerText) {
+            // a nulled cell value is exposed in the DOM as the string "null"
+            return innerText === 'null' ? null : innerText
+          }) ];
       })
       .get();
     const fullTable = [headers, ...cells];
@@ -261,42 +190,32 @@ Cypress.Commands.add('navigateTo', (target) => {
 });
 
 /**
- * Wait for OpenRefine to finish an Ajax load
- *
- * @deprecated
- *
- * NOTE: This command is unreliable because if you call it after starting an operation e.g. with a click(), the loading
- * indicator may have come and gone already by the time waitForOrOperation() is called, causing the cypress test to
- * wait forever on ajax_in_progress=true until it fails due to timeout.
- *
- */
-Cypress.Commands.add('waitForOrOperation', () => {
-  cy.get('body[ajax_in_progress="true"]');
-  cy.get('body[ajax_in_progress="false"]');
-});
-
-/**
- * Wait for OpenRefine parsing options to be updated
- */
-Cypress.Commands.add('waitForImportUpdate', () => {
-  cy.get('#or-import-updating').should('be.visible');
-  cy.get('#or-import-updating').should('not.be.visible');
-  cy.wait(1500); // eslint-disable-line
-});
-
-/**
  * Utility method to fill something into the expression input
- * Need to wait for OpenRefine to preview the result, hence the cy.wait
  */
-Cypress.Commands.add('typeExpression', (expression) => {
-  if (expression.length <= 30) {
-    cy.get('textarea.expression-preview-code').type(expression);
-    cy.get('tbody > tr:nth-child(1) > td:nth-child(3)').should('contain',expression);
-  } else {
-    cy.get('textarea.expression-preview-code').type(expression);
-    cy.get('tbody > tr:nth-child(1) > td:nth-child(3)').should('contain',expression.substring(0,30) + ' ...');
-  }
+Cypress.Commands.add('typeExpression', (expression, options = {}) => {
+    cy.get('textarea.expression-preview-code', options).clear().type(expression);
+    const expectedText = expression.length <= 30 ? expression : `${expression.substring(0, 30)} ...`;
+    cy.get('tbody > tr:nth-child(1) > td:nth-child(3)', options).should('contain', expectedText);
+});
 
+/**
+ * Utility method to select the Python/Jython interpreter
+ */
+Cypress.Commands.add('selectPython', () => {
+  cy.get('textarea.expression-preview-code').clear()
+  cy.get('select[bind="expressionPreviewLanguageSelect"]').select('jython');
+  // Wait for Jython interpreter to load (as indicated by changed error message)
+  cy.get('.expression-preview-parsing-status').contains('Internal error');
+});
+
+/**
+ * Utility method to select the Clojure interpreter
+ */
+Cypress.Commands.add('selectClojure', () => {
+  cy.get('textarea.expression-preview-code').clear().type('(');
+  cy.get('select[bind="expressionPreviewLanguageSelect"]').select('clojure');
+  // Wait for Clojure interpreter to load (as indicated by changed error message)
+  cy.get('.expression-preview-parsing-status').contains('Syntax error reading source');
 });
 
 /**
@@ -367,7 +286,7 @@ Cypress.Commands.add('visitProject', (projectId) => {
 Cypress.Commands.add(
     'loadAndVisitProject',
     (fixture, projectName = Cypress.currentTest.title +'-'+Date.now()) => {
-      cy.loadProject(fixture, projectName).then((projectId) => {
+      cy.loadProject(fixture, projectName, "fooTag").then((projectId) => {
         cy.visit(Cypress.env('OPENREFINE_URL') + '/project?project=' + projectId);
         cy.waitForProjectTable();
       });
@@ -380,8 +299,8 @@ Cypress.Commands.add('waitForProjectTable', (numRows) => {
   cy.get('#right-panel', { log: false }).should('be.visible');
   cy.get('#project-title').should('exist');
   cy.get(".data-table").find("tr").its('length').should('be.gte', 0);
-  if (arguments.length == 1) {
-    cy.get('#summary-bar').should('to.contain', numRows+' rows');
+  if (numRows) {
+    cy.get('#summary-bar').should('to.contain', numRows.toLocaleString('en')+' rows');
   }
 });
 
@@ -401,9 +320,9 @@ Cypress.Commands.add(
 
 /**
  * Performs drag and drop on target and source item
- * sourcSelector jquery selector for the element to be dragged
- * targetSelector jquery selector for the element to be dropped on
- * position position relative to the target element to perform the drop
+ * sourceSelector - jquery selector for the element to be dragged
+ * targetSelector - jquery selector for the element to be dropped on
+ * position - position relative to the target element to perform the drop
  */
 Cypress.Commands.add('dragAndDrop', (sourceSelector, targetSelector, position = 'center') => {
   cy.get(sourceSelector).trigger('mousedown', { which: 1 });
@@ -416,13 +335,13 @@ Cypress.Commands.add('dragAndDrop', (sourceSelector, targetSelector, position = 
 Cypress.Commands.add(
   'loadAndVisitSampleJSONProject',
   (projectName, fixture) => {
+    const jsonText = JSON.stringify(fixture)
     cy.visitOpenRefine();
     cy.navigateTo('Create project');
-    cy.get('#create-project-ui-source-selection-tabs > div')
+    cy.get('#create-project-ui-source-selection-tabs > a')
       .contains('Clipboard')
       .click();
-
-    cy.get('textarea').invoke('val', fixture);
+    cy.get('textarea').invoke('val', jsonText);
     cy.get(
       '.create-project-ui-source-selection-tab-body.selected button.button-primary'
     )

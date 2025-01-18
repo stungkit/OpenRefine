@@ -14,6 +14,7 @@ WarningsRenderer._renderEntity = function (entity, plainText) {
   if (entity.label) {
     fullLabel = entity.label + ' (' + id + ')';
   }
+
   if (plainText) {
     return fullLabel;
   }
@@ -91,17 +92,16 @@ WarningsRenderer._renderWarning = function (warning, onLocateRows) {
   var bodyTd = $('<td></td>')
       .addClass('wb-warning-body')
       .appendTo(tr);
-  var h1 = $('<h1></h1>')
-      .html(title)
-      .appendTo(bodyTd);
-  var p = $('<p></p>')
-      .html(body)
-      .appendTo(bodyTd);
+
   if (warning.facetable) {
+    var div = $('<div></div>');
+    var h1 = $('<h1></h1>')
+    .addClass('wb-warning-body-h1')
+    .html(title);
+    div.append(h1);
     var facetingButton = $('<button></button>')
         .addClass('button')
         .text($.i18n('wikibase-issues/locate-offending-rows'))
-        .appendTo(bodyTd);
     facetingButton.on('click', function(evt) {
         if (onLocateRows) {
           onLocateRows();
@@ -118,7 +118,17 @@ WarningsRenderer._renderWarning = function (warning, onLocateRows) {
         }
         evt.preventDefault();
     });
+    div.append(facetingButton);
+    div.appendTo(bodyTd);
+  } else {
+    var h1 = $('<h1></h1>')
+    .html(title)
+    .appendTo(bodyTd);
   }
+  var p = $('<p></p>')
+      .html(body)
+      .addClass('wb-warning-body-subtext')
+      .appendTo(bodyTd);
   var countTd = $('<td></td>')
       .addClass('wb-warning-count')
       .appendTo(tr);
@@ -127,5 +137,3 @@ WarningsRenderer._renderWarning = function (warning, onLocateRows) {
       .appendTo(countTd);
   return tr;
 };
-
-

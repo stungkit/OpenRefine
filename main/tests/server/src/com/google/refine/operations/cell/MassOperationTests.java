@@ -27,14 +27,31 @@
 
 package com.google.refine.operations.cell;
 
+import static org.testng.Assert.assertThrows;
+
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.refine.RefineTest;
+import com.google.refine.browsing.DecoratedValue;
+import com.google.refine.browsing.Engine;
+import com.google.refine.browsing.EngineConfig;
+import com.google.refine.browsing.facets.ListFacet.ListFacetConfig;
+import com.google.refine.expr.EvalError;
+import com.google.refine.expr.MetaParser;
+import com.google.refine.grel.Parser;
+import com.google.refine.model.Project;
+import com.google.refine.operations.OperationDescription;
 import com.google.refine.operations.OperationRegistry;
 import com.google.refine.operations.cell.MassEditOperation.Edit;
 import com.google.refine.util.ParsingUtilities;
@@ -45,6 +62,16 @@ public class MassOperationTests extends RefineTest {
     private List<Edit> editList;
     private String editsString;
 
+    @BeforeMethod
+    public void registerGRELParser() {
+        MetaParser.registerLanguageParser("grel", "GREL", Parser.grelParser, "value");
+    }
+
+    @AfterMethod
+    public void unregisterGRELParser() {
+        MetaParser.unregisterLanguageParser("grel");
+    }
+
     @BeforeSuite
     public void setUp() {
         OperationRegistry.registerOperation(getCoreModule(), "mass-edit", MassEditOperation.class);
@@ -53,7 +80,7 @@ public class MassOperationTests extends RefineTest {
     @Test
     public void serializeMassEditOperation() throws Exception {
         String json = "{\"op\":\"core/mass-edit\","
-                + "\"description\":\"Mass edit cells in column my column\","
+                + "\"description\":" + new TextNode(OperationDescription.cell_mass_edit_brief("my column")).toString() + ","
                 + "\"engineConfig\":{\"mode\":\"record-based\",\"facets\":[]},"
                 + "\"columnName\":\"my column\",\"expression\":\"value\","
                 + "\"edits\":[{\"fromBlank\":false,\"fromError\":false,\"from\":[\"String\"],\"to\":\"newString\"}]}";
@@ -145,6 +172,82 @@ public class MassOperationTests extends RefineTest {
 
     }
 
+    @Test
+    public void testValidate() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new MassEditOperation(invalidEngineConfig, "foo", "grel:value", editsWithFromBlank).validate());
+        assertThrows(IllegalArgumentException.class,
+                () -> new MassEditOperation(defaultEngineConfig, null, "grel:value", editsWithFromBlank).validate());
+        assertThrows(IllegalArgumentException.class,
+                () -> new MassEditOperation(defaultEngineConfig, "foo", "grel:invalid(", editsWithFromBlank).validate());
+        assertThrows(IllegalArgumentException.class,
+                () -> new MassEditOperation(defaultEngineConfig, "foo", "grel:value", null).validate());
+    }
+
     // Not yet testing for mass edit from OR Error
 
+    private Project project;
+    private static EngineConfig engineConfig;
+    private ListFacetConfig facet;
+    private List<Edit> edits;
+    private List<Edit> editsWithFromBlank;
+
+    @BeforeMethod
+    public void setUpInitialState() {
+        project = createProject(new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "v1", "a" },
+                        { "v3", "a" },
+                        { "", "a" },
+                        { "", "b" },
+                        { new EvalError("error"), "a" },
+                        { "v1", "b" }
+                });
+        facet = new ListFacetConfig();
+        facet.columnName = "bar";
+        facet.name = "bar";
+        facet.expression = "grel:value";
+        facet.selection = Collections.singletonList(new DecoratedValue("a", "a"));
+        engineConfig = new EngineConfig(Arrays.asList(facet), Engine.Mode.RowBased);
+        edits = Collections.singletonList(new Edit(Collections.singletonList("v1"), false, false, "v2"));
+        editsWithFromBlank = Arrays.asList(edits.get(0), new Edit(Collections.emptyList(), true, false, "hey"));
+    }
+
+    @Test
+    public void testSimpleReplace() throws Exception {
+        MassEditOperation operation = new MassEditOperation(engineConfig, "foo", "grel:value", editsWithFromBlank);
+
+        runOperation(operation, project);
+
+        Project expected = createProject(
+                new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "v2", "a" },
+                        { "v3", "a" },
+                        { "hey", "a" },
+                        { "", "b" },
+                        { new EvalError("error"), "a" },
+                        { "v1", "b" },
+                });
+        assertProjectEquals(project, expected);
+    }
+
+    @Test
+    public void testRecordsMode() throws Exception {
+        EngineConfig engineConfig = new EngineConfig(Arrays.asList(facet), Engine.Mode.RecordBased);
+        MassEditOperation operation = new MassEditOperation(engineConfig, "foo", "grel:value", editsWithFromBlank);
+
+        runOperation(operation, project);
+
+        Project expected = createProject(new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "v2", "a" },
+                        { "v3", "a" },
+                        { "hey", "a" },
+                        { "hey", "b" },
+                        { new EvalError("error"), "a" },
+                        { "v1", "b" }
+                });
+        assertProjectEquals(project, expected);
+    }
 }

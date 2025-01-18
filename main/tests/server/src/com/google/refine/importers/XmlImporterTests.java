@@ -33,16 +33,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.google.refine.importers;
 
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNotNull;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.google.refine.importers.tree.ImportColumnGroup;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -51,8 +56,6 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.refine.importers.tree.TreeImportingParserBase;
 import com.google.refine.importing.ImportingJob;
 import com.google.refine.model.ColumnGroup;
@@ -97,7 +100,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void canParseSample() {
+    public void canParseSample() throws Exception {
         RunTest(getSample());
 
         assertProjectCreated(project, 4, 6);
@@ -135,7 +138,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void canParseDeeplyNestedSample() {
+    public void canParseDeeplyNestedSample() throws Exception {
         RunTest(getDeeplyNestedSample(), getNestedOptions(job, SUT));
 
         assertProjectCreated(project, 4, 6);
@@ -147,7 +150,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void canParseSampleWithMixedElement() {
+    public void canParseSampleWithMixedElement() throws Exception {
         RunTest(getMixedElementSample(), getNestedOptions(job, SUT));
 
         assertProjectCreated(project, 4, 6);
@@ -159,7 +162,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void ignoresDtds() {
+    public void ignoresDtds() throws Exception {
         RunTest(getSampleWithDtd());
 
         assertProjectCreated(project, 4, 6);
@@ -170,7 +173,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void canParseSampleWithDuplicateNestedElements() {
+    public void canParseSampleWithDuplicateNestedElements() throws Exception {
         RunTest(getSampleWithDuplicateNestedElements());
 
         assertProjectCreated(project, 4, 12);
@@ -184,7 +187,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void testCanParseLineBreak() {
+    public void testCanParseLineBreak() throws Exception {
 
         RunTest(getSampleWithLineBreak());
 
@@ -198,7 +201,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void testElementsWithVaryingStructure() {
+    public void testElementsWithVaryingStructure() throws Exception {
         RunTest(getSampleWithVaryingStructure());
 
         assertProjectCreated(project, 5, 6);
@@ -215,7 +218,7 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     @Test
-    public void testElementWithNestedTree() {
+    public void testElementWithNestedTree() throws Exception {
         RunTest(getSampleWithTreeStructure());
 
         assertProjectCreated(project, 5, 6);
@@ -424,18 +427,9 @@ public class XmlImporterTests extends ImporterTest {
     }
 
     private void RunTest(String testString, ObjectNode objectNode) {
-        try {
-            inputStream = new ByteArrayInputStream(testString.getBytes("UTF-8"));
-        } catch (UnsupportedEncodingException e1) {
-            Assert.fail();
-        }
+        inputStream = new ByteArrayInputStream(testString.getBytes(StandardCharsets.UTF_8));
 
-        try {
-            parseOneFile(SUT, inputStream, objectNode);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Assert.fail();
-        }
+        parseOneFile(SUT, inputStream, objectNode);
     }
 
     @Override

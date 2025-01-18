@@ -82,7 +82,7 @@ $(function() {
     return false;
   };
 
-  var showVersion = function() {
+  var maybeShowNotifications = function() {
     $.getJSON(
         "command/core/get-version",
         null,
@@ -90,13 +90,96 @@ $(function() {
           OpenRefineVersion = data;
 
           $("#openrefine-version").text($.i18n('core-index/refine-version', OpenRefineVersion.full_version));
+          $("#openrefine-extensions").text($.i18n('core-index/refine-extensions', OpenRefineVersion.module_names.join(", ")));
           $("#java-runtime-version").text(OpenRefineVersion.java_runtime_name + " " + OpenRefineVersion.java_runtime_version);
           if (OpenRefineVersion.display_new_version_notice === "true") {
-            $.getJSON("https://api.github.com/repos/openrefine/openrefine/releases/latest",
+            showNotifications();
+          }
+        }
+    );
+  };
+
+  var storeNotificationStatus = function(notificationStatus) {
+     Refine.wrapCSRF(function(csrfToken) {
+        $.post("command/core/set-preference",
+          {
+            name: 'notification.status',
+            value: JSON.stringify(notificationStatus),
+            csrf_token: csrfToken
+          });
+     });
+  };
+
+  var showNotifications = function() {
+    $.get("command/core/get-preference",
+      { "name": "notification.status" },
+      function(data) {
+        let notificationStatus = data.value;
+        if (notificationStatus === null) {
+          // this is the first time we are starting OpenRefine on this workspace.
+          // Let's not prompt the user yet, wait for next time instead.
+          storeNotificationStatus("promptUser");
+        } else if (notificationStatus == "promptUser") {
+          var container = $('<div id="notification-container">')
+          var hideNotification = function() {
+            container.remove();
+          };
+          var notification = $('<div id="notification">')
+            .text($.i18n('core-index/notification-opt-in'))
+            .appendTo(container);
+          $('<a>')
+            .addClass("notification-action")
+            .attr('href', '#')
+            .text($.i18n('core-buttons/yes'))
+            .appendTo(notification)
+            .on('click', function() {
+              storeNotificationStatus("enabled");
+              hideNotification();
+            });
+          $('<a>')
+            .addClass("notification-action")
+            .attr('href', '#')
+            .text($.i18n('core-buttons/no'))
+            .appendTo(notification)
+            .on('click', function() {
+              storeNotificationStatus("disabled");
+              hideNotification();
+            });
+          var privacySpan = $('<span>')
+            .addClass("notification-action")
+            .text('(')
+            .appendTo(notification);
+          $('<a>')
+            .attr('href', 'https://openrefine.org/privacy')
+            .attr('target', '_blank')
+            .text($.i18n('core-index/notification-privacy-info'))
+            .appendTo(privacySpan);
+          privacySpan.append(')');
+          container
+            .appendTo(document.body);
+        } else if (notificationStatus == "enabled") {
+            $.getJSON("https://openrefine.org/versions.json",
                 function (data) {
-                  var latestVersion = data.tag_name;
-                  var latestVersionName = data.name;
-                  var latestVersionUrl = data.html_url;
+                  if (data.events) {
+                    var latestEvent = data.events[0];
+                    var container = $('<div id="notification-container">')
+                        .appendTo(document.body);
+                    var notification = $('<div id="notification">')
+                        .appendTo(container);
+                    var link = $('<a/>')
+                        .attr("href", latestEvent.link)
+                        .attr("target", "_blank")
+                        .text(latestEvent.text)
+                        .appendTo(notification);
+                    return; 
+                  }
+
+                  var stableReleases = data.releases.filter(release => release.stable);
+                  if (!stableReleases) {
+                    return;
+                  }
+                  var latestStableRelease = stableReleases[0];
+                  var latestVersion = latestStableRelease.version;
                   var thisVersion = OpenRefineVersion.version;
 
                   if (latestVersion.startsWith("v")) {
@@ -111,66 +194,24 @@ $(function() {
                         .appendTo(container);
                     $('<a>')
                         .addClass('notification-action')
-                        .attr("href", latestVersionUrl)
+                        .attr("href", "https://openrefine.org/download")
                         .attr("target", "_blank")
-                        .text($.i18n('core-index/download-now', latestVersionName))
+                        .text($.i18n('core-index/new-version-available', latestVersion))
                         .appendTo(notification);
                   }
                 });
-          }
         }
+      }
     );
   };
 
   var resize = function() {
-    var leftPanelWidth = 150;
-    // px
-    var width = $(window).width();
-    var height = $(window).height();
-    var headerHeight = $('#header').outerHeight();
-    var panelHeight = height - headerHeight;
-
-    $('.main-layout-panel')
-    .css("top", headerHeight + "px")
-    .css("bottom", "0px")
-    .css("height", panelHeight + "px")
-    .css("visibility", "visible");
-
-    $('#left-panel')
-    .css("left", "0px")
-    .css("width", leftPanelWidth + "px");
-    var leftPanelBodyHPaddings = 10;
-    // px
-    var leftPanelBodyVPaddings = 0;
-    // px
-    $('#left-panel-body')
-    .css("margin-left", leftPanelBodyHPaddings + "px")
-    .css("margin-top", leftPanelBodyVPaddings + "px")
-    .css("width", ($('#left-panel').width() - leftPanelBodyHPaddings) + "px")
-    .css("height", ($('#left-panel').height() - leftPanelBodyVPaddings) + "px");
-
-    $('#right-panel')
-    .css("left", leftPanelWidth + "px")
-    .css("width", (width - leftPanelWidth) + "px");
-
-    var rightPanelBodyHPaddings = 5;
-    // px
-    var rightPanelBodyVPaddings = 5;
-    // px
-    $('#right-panel-body')
-    .css("margin-left", rightPanelBodyHPaddings + "px")
-    .css("margin-top", rightPanelBodyVPaddings + "px")
-    .css("width", ($('#right-panel').width() - rightPanelBodyHPaddings) + "px")
-    .css("height", ($('#right-panel').height() - rightPanelBodyVPaddings) + "px");
-
     for (var i = 0; i < Refine.actionAreas.length; i++) {
       if (Refine.actionAreas[i].ui.resize) {
         Refine.actionAreas[i].ui.resize();
       }
     }
   };
-  $(window).on("resize", resize);
-  window.setTimeout(resize, 100); // for Chrome, give the window some time to layout first
 
   var renderActionArea = function(actionArea) {
     actionArea.bodyElmt = $('<div>')
@@ -179,11 +220,19 @@ $(function() {
 
     actionArea.tabElmt = $('<li>')
     .addClass('action-area-tab')
-    .text(actionArea.label)
-    .appendTo($('#action-area-tabs'))
-    .on('click', function() {
-      Refine.selectActionArea(actionArea.id);
-    });
+    .append(
+      $('<a>')
+      .attr('href', '#' + actionArea.id)
+      .text(actionArea.label)
+      .on('click', function() {
+        Refine.selectActionArea(actionArea.id);
+        // clear action area specific query parameters
+        var url = new URL(location.href);
+        url.search = '';
+        window.history.replaceState('', '', url);
+      })
+    )
+    .appendTo($('#action-area-tabs'));
 
     actionArea.ui = new actionArea.uiClass(actionArea.bodyElmt);
   };
@@ -214,5 +263,8 @@ $(function() {
   $("#or-index-try").text($.i18n('core-index/try-these'));
   $("#or-index-sample").text($.i18n('core-index/sample-data'));
 
-  showVersion();
+  maybeShowNotifications();
+
+  $(window).on("resize", resize);
+  resize();
 });

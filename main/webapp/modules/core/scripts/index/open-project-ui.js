@@ -38,53 +38,26 @@ Refine.OpenProjectUI = function(elmt) {
 
   this._elmt = elmt;
   this._elmts = DOM.bind(elmt);
-
-  $("#project-file-input").on('change',function() {
-    if ($("#project-name-input")[0].value.length === 0) {
-      var fileName = this.files[0].fileName;
-      if (fileName) {
-        $("#project-name-input")[0].value = fileName.replace(/\.\w+/, "").replace(/[_\-]/g, " ");
-      }
-      $("#project-name-input").trigger('focus').select();
-    }
-  }).on('keypress',function(evt) {
-    if (evt.key == "Enter") {
-      return self._onClickUploadFileButton(evt);
-    }
-  });
-
-  $("#upload-file-button").on('click',function(evt) {
-    return self._onClickUploadFileButton(evt);
-  });
-
-  $('#projects-workspace-open').text($.i18n('core-index-open/browse'));
-  $('#projects-workspace-open').on('click',function() {
-    Refine.postCSRF(
-      "command/core/open-workspace-dir",
-      {},
-      function (data) {
-        if (data.code != "ok" && "message" in data) {
-          alert(data.message);
-        }
-      },
-      "json"
-    );
-  });
+  
+  if (Host.isLocalhost()) {
+    $('#projects-workspace-open').text($.i18n('core-index-open/browse'));
+    $('#projects-workspace-open').on('click',function() {
+      Refine.postCSRF(
+        "command/core/open-workspace-dir",
+        {},
+        function (data) {
+          if (data.code != "ok" && "message" in data) {
+            alert(data.message);
+          }
+        },
+        "json"
+      );
+    });
+  } else {
+    $('#projects-workspace-open').hide();
+  }
   Refine.TagsManager.allProjectTags = [];
   this._buildTagsAndFetchProjects();
-};
-
-Refine.OpenProjectUI.prototype.resize = function() {
-  var height = this._elmt.height();
-  var width = this._elmt.width();
-  var controlsHeight = this._elmts.workspaceControls.outerHeight();
-
-  this._elmts.projectsContainer
-  .css("height", (height - controlsHeight - DOM.getVPaddings(this._elmts.projectsContainer)) + "px");
-
-  this._elmts.workspaceControls
-  .css("bottom", "0px")
-  .css("width", (width - DOM.getHPaddings(this._elmts.workspaceControls)) + "px");
 };
 
 Refine.OpenProjectUI.prototype._fetchProjects = function() {
@@ -94,36 +67,132 @@ Refine.OpenProjectUI.prototype._fetchProjects = function() {
       null,
       function(data) {
         self._renderProjects(data);
-        self.resize();
+        self.resize(); // other version of this function excludes this resize
       },
       "json"
   );
 };
 
 Refine.OpenProjectUI.prototype._buildTagsAndFetchProjects = function() {
-    this._buildTagsListPanel();
+    this._buildProjectSearchPanel();
+    Refine.OpenProjectUI.refreshTagsListPanel();
     this._fetchProjects();
+    var tag = new URLSearchParams(window.location.search).get('tag');
+    if (!tag) tag = '';
+    Refine.OpenProjectUI._filterTags(tag);
 };
 
-Refine.OpenProjectUI.prototype._buildTagsListPanel = function() {
-    var self = this;
-    self._allTags = Refine.TagsManager._getAllProjectTags();
+Refine.OpenProjectUI.prototype._buildProjectSearchPanel = function(){
+  const self = this;
+  self._openSearchInput();
+  self._searchInput();
+}
 
-    var container = self._elmts.projectTags.empty();
-    var ul = $("<ul/>").attr('id', 'tagsUl').appendTo(container);
+Refine.OpenProjectUI.refreshTagsListPanel = function() {
+    var allTags = Refine.TagsManager._getAllProjectTags();
+
+    var ul = $("#tagsUl").empty();
 
     // Add 'all' menu item
-    var li = $('<li/>').addClass("active").appendTo(ul);
-    $('<a/>').attr('href', '#all').addClass("current").text('All').appendTo(li);
+    var li = $('<li/>').appendTo(ul);
+    var a = $('<a/>').attr('href', '?tag=#open-project').text('All').appendTo(li);
+    a.on('click', function(e) {
+      e.preventDefault();
+      Refine.OpenProjectUI._filterTags('');
+    });
 
-    $.each(self._allTags, function(i) {
-            var li = $('<li/>').appendTo(ul);
-            $('<a/>').attr('href', '#' + self._allTags[i]).text(self._allTags[i])
-                            .appendTo(li);
+    $.each(allTags, function(i) {
+      var li = $('<li/>').appendTo(ul);
+      var a = $('<a/>').attr('href', '?tag=' + allTags[i] + '#open-project').text(allTags[i])
+                      .appendTo(li);
+      a.on('click', function(elm) {
+        elm.preventDefault();
+        Refine.OpenProjectUI._filterTags(allTags[i]);
+      });
     });
 };
 
+Refine.OpenProjectUI._filterTags = function(tag) {
+  // this function can run even if the open project UI is not visible to the user, so only update the URL if it is
+  if (window.hash === "#open-project") window.history.pushState("", "", "?tag=" + tag + "#open-project");
 
+  $('#tagsUl').children().each(function() {
+    $(this).removeClass('current');
+  });
+  $('#tagsUl').find('a[href="?tag=' + tag + '#open-project"]').parent().addClass('current');
+
+  $("#tableBody").children().each(function() {
+    if ($(this).hasClass(tag) || tag === "") {
+      $(this).show();
+    } else {
+      $(this).hide();
+    }
+  });
+};
+
+Refine.OpenProjectUI.prototype._openSearchInput = function() {
+  const icon = $('#search-icon');
+  const input = $('#search-input');
+  input.attr("placeholder", $.i18n("core-index-open/search-placeholder"));
+  icon.click(function () {
+    if (input.is(':hidden')) {
+      // $("#tagsUl").hide();
+      $("#search-input").show();
+      icon.addClass("magnifying-glass-open");
+      input.show();
+      input.focus();
+    } else {
+      input.hide();
+      input.val('');
+      icon.removeClass("magnifying-glass-open");
+      $("#tableBody").filterListSearch("");
+      $("#search-input").hide();
+      // $("#tagsUl").show();
+    }
+  });
+};
+
+Refine.OpenProjectUI.prototype._searchInput = function() {
+  const input = $('#search-input');
+  //setup before functions
+  let typingTimer;                //timer identifier
+  const doneTypingInterval = 500;  //time in ms
+  // search when done typing interval is over when not typing anymore
+
+  //on keyup, start the countdown
+  input.on('keyup', function (e) {
+    clearTimeout(typingTimer);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doneTyping();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      $('#search-icon').click(); // close search box on ESC
+    } else {
+      typingTimer = setTimeout(doneTyping, doneTypingInterval);
+    }
+  });
+
+  input.on('paste', function (e) {
+    clearTimeout(typingTimer);
+    doneTyping();
+  });
+
+
+    //on keydown, clear the countdown
+  input.on('keydown', function () {
+    clearTimeout(typingTimer);
+  });
+
+  //user is "finished typing," do something
+  function doneTyping () {
+    const text = input.val();
+    // get the text, get back the projects that contains the text in the metadata
+    $("#tableBody").filterListSearch(text);
+  }
+};
+
+// FIXME: This is overwriting an earlier function definition
 Refine.OpenProjectUI.prototype._fetchProjects = function() {
     var self = this;
     $.ajax({
@@ -132,7 +201,6 @@ Refine.OpenProjectUI.prototype._fetchProjects = function() {
             dataType : 'json',
             success : function(data) {
                     self._renderProjects(data);
-                    self.resize();
             },
             data : {},
             async : false
@@ -140,6 +208,8 @@ Refine.OpenProjectUI.prototype._fetchProjects = function() {
 };
 
 Refine.OpenProjectUI.prototype._renderProjects = function(data) {
+  const options  = { dateStyle: 'medium', timeStyle: 'medium' };
+  const dateFormatter = new Intl.DateTimeFormat(Refine.userLang || navigator.language, options);
   var self = this;
   var projects = [];
   for (var n in data.projects) {
@@ -154,7 +224,10 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
          console.log('Project '+project.id+' name is not set. skipping...');
          continue;
       }
-      project.date = moment(project.modified).format('YYYY-MM-DD HH:mm A');
+
+      // project.modified is ISO 8601 format string
+      const date = new Date(project.modified);
+      project.date = dateFormatter.format(date);
       
       if (typeof project.userMetadata !== "undefined")  {
           for (var m in data.customMetadataColumns) {
@@ -167,7 +240,7 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
                   if (!found) {
                       project.userMetadata.push({
                           name: data.customMetadataColumns[m].name,
-                          dispay: data.customMetadataColumns[m].display,
+                          display: data.customMetadataColumns[m].display,
                           value: ""
                       });
                   }
@@ -205,7 +278,8 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
           
           return htmlDisplay;
       })() +     
-      '</tr></thead><tbody id="tableBody"></tbody></table>'
+      '</tr></thead><tbody id="tableBody"></tbody></table>  <div id="no-results-message">'
+      +$.i18n('core-index-open/no-results-message')+'</div>'
     ).appendTo(projectsUl)[0];
 
     var renderProject = function(project) {
@@ -248,12 +322,13 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
       );
       
       $('<div></div>')
-      .html(project.date)
+      .html('<span style="display:none">' + project.modified + '</span>' + project.date)
       .addClass("last-modified")
       .appendTo($(tr.insertCell(tr.cells.length)));
       
       var nameLink = $('<a></a>')
       .addClass("project-name")
+      .addClass("searchable")
       .text(project.name)
       .attr("href", "project?project=" + project.id)
       .appendTo($(tr.insertCell(tr.cells.length)));
@@ -264,6 +339,7 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
         $("<span/>")
         .addClass("project-tag")
         .attr("data-tag-name", tag)
+        .addClass("searchable")
         .text(tag)
         .appendTo(tagsCell);
         $(tr).addClass(tag);
@@ -272,6 +348,7 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
     
     var appendMetaField = function(data) {
         $('<div></div>')
+        .addClass("searchable")
         .html(data)
         .appendTo($(tr.insertCell(tr.cells.length)));
     };
@@ -285,7 +362,7 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
     for(var i in data)
     {
          if (data[i].display === true) {
-             appendMetaField(data[i].value); 
+             appendMetaField(data[i].value);
          }
     }
         
@@ -310,37 +387,10 @@ Refine.OpenProjectUI.prototype._renderProjects = function(data) {
 };
 
 Refine.OpenProjectUI.prototype._addTagFilter = function() {
-    $("#tableBody").filterList();
-};
-
-Refine.OpenProjectUI.prototype._onClickUploadFileButton = function(evt) {
-  var projectName = $("#project-name-input")[0].value;
-  var dataURL = jQueryTrim($("#project-url-input")[0].value);
-  if (! jQueryTrim(projectName).length) {
-    window.alert($.i18n('core-index-open/warning-proj-name'));
-
-  } else if ($("#project-file-input")[0].files.length === 0 && ! dataURL.length) {
-    window.alert($.i18n('core-index-open/warning-data-file'));
-
-  } else {
-    $("#file-upload-form").attr("action",
-        "command/core/create-project-from-upload?" + [
-          "url=" +                encodeURIComponent(dataURL),
-          "split-into-columns=" + $("#split-into-columns-input")[0].checked,
-          "separator=" +          $("#separator-input")[0].value,
-          "ignore=" +             $("#ignore-input")[0].value,
-          "header-lines=" +       $("#header-lines-input")[0].value,
-          "skip=" +               $("#skip-input")[0].value,
-          "limit=" +              $("#limit-input")[0].value,
-          "guess-value-type=" +   $("#guess-value-type-input")[0].checked,
-          "ignore-quotes=" +      $("#ignore-quotes-input")[0].checked
-        ].join("&"));
-
-    return true;
+  if (window.location.hash === 'open-project') {
+    var tag = new URLSearchParams(window.location.search).get("tag", "");
+    Refine.OpenProjectUI._filterTags(tag);
   }
-
-  evt.preventDefault();
-  return false;
 };
 
 Refine.OpenProjectUI.refreshProject = function(tr, metaData, project) {
@@ -411,21 +461,8 @@ Refine.OpenProjectUI.refreshProject = function(tr, metaData, project) {
              refreshMetaField(data[i].value,index); index++; 
          }
     }
-    
-    Refine.TagsManager.allProjectTags = [];
-    var self = this;
-    var list = $("#tagsUl").empty();
-    self._allTags = Refine.TagsManager._getAllProjectTags();
-     
-      var li = $('<li/>').addClass("active").appendTo(list);
-      $('<a/>').attr('href',
-      '#all').addClass("current").text('All').appendTo(li);
-     
-      $.each(self._allTags, function(i) {
-      var li = $('<li/>').appendTo(list);
-      $('<a/>').attr('href', '#' + self._allTags[i]).text(self._allTags[i])
-      .appendTo(li);
-      });
+
+    Refine.OpenProjectUI.refreshTagsListPanel();
 };
 
 Refine.actionAreas.push({

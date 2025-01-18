@@ -6,13 +6,18 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.io.StringWriter;
+import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.testng.Assert;
+import okhttp3.HttpUrl;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -20,11 +25,6 @@ import com.google.refine.RefineTest;
 import com.google.refine.commands.Command;
 import com.google.refine.model.Project;
 import com.google.refine.util.TestUtils;
-
-import okhttp3.HttpUrl;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.RecordedRequest;
 
 public class GuessTypesOfColumnCommandTests extends RefineTest {
 
@@ -35,29 +35,27 @@ public class GuessTypesOfColumnCommandTests extends RefineTest {
     Project project = null;
 
     @BeforeMethod
-    public void setUpCommand() {
+    public void setUpCommand() throws IOException {
         command = new GuessTypesOfColumnCommand();
         command.setSampleSize(2);
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         writer = new StringWriter();
-        try {
-            when(response.getWriter()).thenReturn(new PrintWriter(writer));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        project = createCSVProject(
-                "foo,bar\n"
-                        + "France,b\n"
-                        + "Japan,d\n"
-                        + "Paraguay,x");
+        when(response.getWriter()).thenReturn(new PrintWriter(writer));
+        project = createProject(
+                new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "France", "b" },
+                        { "Japan", "d" },
+                        { "Paraguay", "x" }
+                });
 
     }
 
     @Test
     public void testCSRFProtection() throws ServletException, IOException {
         command.doPost(request, response);
-        TestUtils.assertEqualAsJson("{\"code\":\"error\",\"message\":\"Missing or invalid csrf_token parameter\"}", writer.toString());
+        TestUtils.assertEqualsAsJson(writer.toString(), "{\"code\":\"error\",\"message\":\"Missing or invalid csrf_token parameter\"}");
     }
 
     @Test
@@ -146,10 +144,10 @@ public class GuessTypesOfColumnCommandTests extends RefineTest {
 
             command.doPost(request, response);
 
-            TestUtils.assertEqualAsJson(guessedTypes, writer.toString());
+            TestUtils.assertEqualsAsJson(guessedTypes, writer.toString());
 
-            RecordedRequest request = server.takeRequest();
-            Assert.assertEquals(request.getBody().readUtf8(), expectedQuery);
+            RecordedRequest request = server.takeRequest(5, TimeUnit.SECONDS);
+            TestUtils.assertEqualAsQueries(request.getBody().readUtf8(), expectedQuery);
         }
     }
 }

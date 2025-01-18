@@ -117,7 +117,7 @@ ProcessPanel.prototype.undo = function() {
         "undo-redo",
         { undoID: this._latestHistoryEntry.id },
         null,
-        { everythingChanged: true }
+        { everythingChanged: true, warnAgainstHistoryErasure: false }
     );
   }
 };
@@ -230,7 +230,8 @@ ProcessPanel.prototype._perform = function(jobs) {
         ui.browsingEngine.addFacet(
             job.facetType,
             job.facetConfig,
-            job.facetOptions
+            job.facetOptions,
+            true
         );
       } catch (e) {
         //

@@ -27,26 +27,51 @@
 
 package com.google.refine.operations.recon;
 
+import java.io.Serializable;
+import java.util.Collections;
+
+import com.fasterxml.jackson.databind.node.TextNode;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.Test;
 
 import com.google.refine.RefineTest;
+import com.google.refine.browsing.Engine.Mode;
+import com.google.refine.browsing.EngineConfig;
+import com.google.refine.model.AbstractOperation;
+import com.google.refine.model.Cell;
+import com.google.refine.model.Project;
+import com.google.refine.model.Recon;
+import com.google.refine.operations.OperationDescription;
 import com.google.refine.operations.OperationRegistry;
-import com.google.refine.operations.recon.ReconCopyAcrossColumnsOperation;
 import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.TestUtils;
 
 public class ReconCopyAcrossColumnsOperationTests extends RefineTest {
+
+    Project project;
 
     @BeforeSuite
     public void registerOperation() {
         OperationRegistry.registerOperation(getCoreModule(), "recon-copy-across-columns", ReconCopyAcrossColumnsOperation.class);
     }
 
+    @BeforeMethod
+    public void setupInitialState() {
+        project = createProject(
+                new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "a", "b" },
+                        { "d", new Cell("b", testRecon("e", "h", Recon.Judgment.Matched)) },
+                        { "b", new Cell("d", testRecon("b", "j", Recon.Judgment.None)) }
+                });
+    }
+
     @Test
     public void serializeReconCopyAcrossColumnsOperation() throws Exception {
         String json = "{\"op\":\"core/recon-copy-across-columns\","
-                + "\"description\":\"Copy recon judgments from column source column to firstsecond\","
+                + "\"description\":"
+                + new TextNode(OperationDescription.recon_copy_across_columns_brief("source column", "first, second")).toString() + ","
                 + "\"engineConfig\":{\"mode\":\"row-based\",\"facets\":[]},"
                 + "\"fromColumnName\":\"source column\","
                 + "\"toColumnNames\":[\"first\",\"second\"],"
@@ -54,4 +79,29 @@ public class ReconCopyAcrossColumnsOperationTests extends RefineTest {
                 + "\"applyToJudgedCells\":true}";
         TestUtils.isSerializedTo(ParsingUtilities.mapper.readValue(json, ReconCopyAcrossColumnsOperation.class), json);
     }
+
+    @Test
+    public void testReconCopyAcrossColumns() throws Exception {
+        AbstractOperation operation = new ReconCopyAcrossColumnsOperation(
+                new EngineConfig(Collections.emptyList(), Mode.RowBased),
+                "bar",
+                new String[] { "foo" },
+                new String[] { "matched", "none" },
+                true);
+
+        runOperation(operation, project);
+
+        Project expected = createProject(
+                new String[] { "foo", "bar" },
+                new Serializable[][] {
+                        { "a", "b" },
+                        { new Cell("d", testRecon("b", "j", Recon.Judgment.None)),
+                                new Cell("b", testRecon("e", "h", Recon.Judgment.Matched)) },
+                        { new Cell("b", testRecon("e", "h", Recon.Judgment.Matched)),
+                                new Cell("d", testRecon("b", "j", Recon.Judgment.None)) }
+                });
+
+        assertProjectEquals(project, expected);
+    }
+
 }

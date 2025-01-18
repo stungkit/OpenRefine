@@ -31,10 +31,10 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.TestUtils;
 
@@ -48,7 +48,7 @@ public class GetExpressionLanguageInfoCommandTests extends ExpressionCommandTest
     @Test
     public void testJsonResponse() throws ServletException, IOException {
 
-        initWorkspace(null, null);
+        initWorkspace(null, null, null);
 
         command.doGet(request, response);
         String jsonResponse = writer.toString();

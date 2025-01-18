@@ -33,8 +33,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
   var columnIndex = Refine.columnNameToColumnIndex(column.name);
+  var serviceUrl = null;
+  var service = null;
+  if (column.reconConfig) {
+    serviceUrl = column.reconConfig.service;
+  }
+  if (serviceUrl) {
+    service = ReconciliationManager.getServiceFromUrl(serviceUrl);
+  }
   var doReconcile = function() {
-    new ReconDialog(column);
+      new ReconDialog(column, serviceUrl);
   };
 
   var doReconDiscardJudgments = function() {
@@ -42,7 +50,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       "recon-discard-judgments",
       { columnName: column.name, clearData: false },
       null,
-      { cellsChanged: true, columnStatsChanged: true }
+      { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true }
     );
   };
 
@@ -51,16 +59,86 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       "recon-discard-judgments",
       { columnName: column.name, clearData: true },
       null,
-      { cellsChanged: true, columnStatsChanged: true }
+      { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true }
     );
   };
+
+  function successCallBack(columnName,dismissDialog)
+  {
+      var serviceUrl = null;
+      var service = null;
+      if (column.reconConfig) {
+        serviceUrl = column.reconConfig.service;
+      }
+      if (serviceUrl) {
+        service = ReconciliationManager.getServiceFromUrl(serviceUrl);
+      }
+      if (service && service.view){
+        
+        Refine.postCoreProcess
+        (
+          "add-column",
+          {
+            baseColumnName: column.name,
+            newColumnName: columnName,
+            columnInsertIndex: columnIndex + 1,
+            onError: "set-to-blank"
+          },
+          { expression: 'if(cell.recon.match!=null,"' + service.view.url + '".replace("{{id}}",escape(cell.recon.match.id,"url")),null)' },
+          { modelsChanged: true },
+          { onDone: dismissDialog},
+        );
+      } else {
+        alert($.i18n('core-views/service-does-not-associate-URLs-to-the-entities-it-contains'));
+      }
+    }
+
+
+  var doAddColumnWithUrlOfMatchedEntities = function () {
+
+    promptForColumn(successCallBack,'core-views/add-entity-URL-col');
+
+  }
+
+
+  function promptForColumn(successCallBack,dialogName){
+    var frame = $(
+      DOM.loadHTML("core", "scripts/views/data-table/add-q-column-dialog.html"));
+
+    var elmts = DOM.bind(frame);
+    elmts.dialogHeader.text($.i18n(dialogName, column.name));
+    elmts.or_views_newCol.text($.i18n('core-views/new-col-name'));
+    elmts.okButton.html($.i18n('core-buttons/ok'));
+    elmts.cancelButton.text($.i18n('core-buttons/cancel'));
+
+    var level = DialogSystem.showDialog(frame);
+    var dismiss = function() { DialogSystem.dismissUntil(level - 1); };
+
+    var o = DataTableView.sampleVisibleRows(column);
+
+    elmts.cancelButton.on('click',dismiss);
+
+    elmts.form.on('submit',function(event) {
+      event.preventDefault();
+      var columnName = jQueryTrim(elmts.columnNameInput[0].value);
+      if (!columnName.length) {
+        alert($.i18n('core-views/warning-col-name'));
+        return;
+      }
+      var dismissDialog=function(o) {
+        dismiss();
+      };
+      successCallBack(columnName,dismissDialog);
+
+    });
+  }
 
   var doReconMatchBestCandidates = function() {
     Refine.postCoreProcess(
       "recon-match-best-candidates",
       { columnName: column.name },
       null,
-      { cellsChanged: true, columnStatsChanged: true }
+      { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true }
     );
   };
 
@@ -78,7 +156,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           schemaSpace: schemaSpace
         },
         null,
-        { cellsChanged: true, columnStatsChanged: true }
+        { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true }
       );
     };
 
@@ -93,7 +171,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       createReconServiceSelectionDialog(headerText, explanationText, onSelect);
     }
   };
-
+  
   var doSearchToMatch = function() {
     var serviceUrl = null;
     var service = null;
@@ -117,7 +195,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           suggestOptions.formatter_url = service.view.url;
        }
     }
-
+    
     var frame = DialogSystem.createDialog();
     frame.width("400px");
 
@@ -128,10 +206,10 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
     $('<p></p>').text($.i18n('core-views/search-fb-topic')).appendTo(body);
 
     var input = $('<input />').appendTo($('<p></p>').appendTo(body));
-
-    input.suggest(suggestOptions).on("fb-select", function(e, data) {
+    
+    input.suggest(sanitizeSuggestOptions(suggestOptions)).on("fb-select", function(e, data) {
         var types = data.notable ? data.notable : [];
-
+      
         Refine.postCoreProcess(
         "recon-match-specific-topic-to-cells",
         {
@@ -143,10 +221,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
             schemaSpace: service.schemaSpace
         },
         null,
-        { cellsChanged: true, columnStatsChanged: true }
+        { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
+        { onDone: function() { DialogSystem.dismissUntil(level - 1); } }
         );
-
-        DialogSystem.dismissUntil(level - 1);
     });
 
     $('<button class="button"></button>').text($.i18n('core-buttons/cancel')).on('click',function() {
@@ -231,55 +308,34 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           schemaSpace: schemaSpace
         },
         null,
-        { cellsChanged: true, columnStatsChanged: true }
+        { cellsChanged: true, columnStatsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true }
       );
     };
 
     createReconServiceSelectionDialog(headerText, explanationText, onSelect);
   };
 
+
+  function successCallBackForAddingIdColumn(columnName,dismissDialog)
+  {
+    Refine.postCoreProcess(
+      "add-column", 
+      {
+        baseColumnName: column.name,  
+        newColumnName: columnName, 
+        columnInsertIndex: columnIndex + 1,
+        onError: "set-to-blank"
+      },
+      { expression: "cell.recon.match.id" },
+      { modelsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
+      { onDone: dismissDialog },
+        );
+  }
+
   var doAddIdcolumn = function() {
-    var frame = $(
-      DOM.loadHTML("core", "scripts/views/data-table/add-q-column-dialog.html"));
-
-    var elmts = DOM.bind(frame);
-    elmts.dialogHeader.text($.i18n('core-views/add-id-col', column.name));
     
-    elmts.or_views_newCol.text($.i18n('core-views/new-col-name'));
-    elmts.okButton.html($.i18n('core-buttons/ok'));
-    elmts.cancelButton.text($.i18n('core-buttons/cancel'));
+   promptForColumn(successCallBackForAddingIdColumn,'core-views/add-id-col');
 
-    var level = DialogSystem.showDialog(frame);
-    var dismiss = function() { DialogSystem.dismissUntil(level - 1); };
-
-    var o = DataTableView.sampleVisibleRows(column);
-    
-    elmts.cancelButton.on('click',dismiss);
-    elmts.form.on('submit',function(event) {
-      event.preventDefault();
-      var columnName = jQueryTrim(elmts.columnNameInput[0].value);
-      if (!columnName.length) {
-        alert($.i18n('core-views/warning-col-name'));
-        return;
-      }
-
-      Refine.postCoreProcess(
-        "add-column", 
-        {
-          baseColumnName: column.name,  
-          newColumnName: columnName, 
-          columnInsertIndex: columnIndex + 1,
-          onError: "set-to-blank"
-        },
-        { expression: "cell.recon.match.id" },
-        { modelsChanged: true },
-        {
-          onDone: function(o) {
-            dismiss();
-          }
-        }
-      );
-    });
   };
 
 
@@ -338,9 +394,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           "recon-copy-across-columns", 
           null,
           config,
-          { rowsChanged: true }
+          { rowsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
+          { onDone: dismiss }
         );
-        dismiss();
       }
     });
   };
@@ -369,7 +425,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
                   "expression" : 'forNonBlank(cell.recon.judgment, v, v, if(isNonBlank(value), "(unreconciled)", "(blank)"))'
                 },
                 {
-                  "scroll" : false
+                  "scroll" : true
                 }
             );
           }
@@ -432,7 +488,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
                   "expression" : 'forNonBlank(cell.recon.features.typeMatch, v, v, if(isNonBlank(value), if(cell.recon != null, "(no type)", "(unreconciled)"), "(blank)"))'
                 },
                 {
-                  "scroll" : false
+                  "scroll" : true
                 }
             );
           }
@@ -449,7 +505,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
                   "expression" : 'forNonBlank(cell.recon.features.nameMatch, v, v, if(isNonBlank(value), "(unreconciled)", "(blank)"))'
                 },
                 {
-                  "scroll" : false
+                  "scroll" : true
                 }
             );
           }
@@ -567,6 +623,12 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       click: doUseValuesAsIdentifiers
     },
     {},
+    {
+      id: "core/Add-column-with-URLs-of-matched-entities",
+      label: $.i18n("core-views/add-column-with-URLs-of-matched-entities"),
+      tooltip: $.i18n("core-views/add-column-with-URLs-of-matched-entities-tooltip"),
+      click: doAddColumnWithUrlOfMatchedEntities
+    },
     {
       id: "core/add-id-column",
       label: $.i18n('core-views/add-id-column'),

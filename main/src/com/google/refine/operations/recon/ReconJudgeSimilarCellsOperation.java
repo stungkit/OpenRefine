@@ -41,6 +41,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import com.google.refine.browsing.EngineConfig;
 import com.google.refine.browsing.RowVisitor;
 import com.google.refine.expr.ExpressionUtils;
@@ -221,8 +222,10 @@ public class ReconJudgeSimilarCellsOperation extends EngineDependentMassCellOper
                                     recon.judgment = Recon.Judgment.New;
                                     recon.match = null;
                                 } else if (_judgment == Judgment.None) {
-                                    recon.judgment = Recon.Judgment.None;
+                                    recon.judgment = recon.error == null ? Recon.Judgment.None : Recon.Judgment.Error;
                                     recon.match = null;
+                                } else if (_judgment == Judgment.Error) {
+                                    throw new IllegalArgumentException("Cannot manually set judgment to 'error'");
                                 }
 
                                 _dupReconMap.put(cell.recon.id, recon);

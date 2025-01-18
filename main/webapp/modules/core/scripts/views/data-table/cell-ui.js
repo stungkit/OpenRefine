@@ -37,6 +37,7 @@ function DataTableCellUI(dataTableView, cell, rowIndex, cellIndex, td) {
   this._rowIndex = rowIndex;
   this._cellIndex = cellIndex;
   this._td = td;
+  this._focusBeforeEdit;
 
   this._render();
 }
@@ -67,28 +68,37 @@ DataTableCellUI.prototype._render = function() {
   var divContent = document.createElement('div');
   divContent.className = 'data-table-cell-content';
 
-  var editLink = document.createElement('a');
+  var editLink = document.createElement('button');
   editLink.className = 'data-table-cell-edit';
   editLink.setAttribute('title', $.i18n('core-views/edit-cell'));
-  editLink.href = 'javascript:{}';
-  divContent.appendChild(editLink).appendChild(document.createTextNode('\u00A0'));
-  editLink.addEventListener('click', function() { self._startEdit(this); });
+  editLink.addEventListener('click', function() {
+    self._startEdit(this);
+    self._focusBeforeEdit = editLink;
+  });
 
   $(this._td).empty()
   .off()
-  .on('mouseenter',function() { editLink.style.visibility = "visible" })
-  .on('mouseleave',function() { editLink.style.visibility = "hidden" });
+  .on('mouseenter',function() { editLink.style.opacity = "1" })
+  .on('mouseleave',function() { if (!$(editLink).is(":focus")) editLink.style.opacity = "0" })
+  .on('focusin',function() { editLink.style.opacity = "1" })
+  .on('focusout',function() { editLink.style.opacity = "0" });
 
   var renderedCell = undefined;
   for (let record of CellRendererRegistry.renderers) {
-    renderedCell = record.renderer.render(this._rowIndex, this._cellIndex, cell, this);
+    try {
+      renderedCell = record.renderer.render(this._rowIndex, this._cellIndex, cell, this);
+    } catch (e) {
+      continue;
+    }
     if (renderedCell) {
       break;
     }
   }
+
   if (renderedCell) {
     divContent.appendChild(renderedCell);
   }
+  divContent.appendChild(editLink).appendChild(document.createTextNode($.i18n('core-facets/edit')));
 
   this._td.appendChild(divContent);
 };
@@ -162,9 +172,10 @@ DataTableCellUI.prototype._startEdit = function(elmt) {
         alert($.i18n('core-views/not-valid-date'));
         return;
       }
-      value = value.toString("yyyy-MM-ddTHH:mm:ssZ");
+      value = new Date(value).toISOString();
     }
 
+    self._focusBeforeEdit.focus();
     MenuSystem.dismissAll();
 
     if (applyOthers) {
@@ -199,6 +210,8 @@ DataTableCellUI.prototype._startEdit = function(elmt) {
               o.cell.r = o.pool.recons[o.cell.r];
             }
 
+            self._focusBeforeEdit.focus();
+            MenuSystem.dismissAll();
             self._cell = o.cell;
             self._dataTableView._updateCell(self._rowIndex, self._cellIndex, self._cell);
             self._render();
@@ -213,7 +226,7 @@ DataTableCellUI.prototype._startEdit = function(elmt) {
   elmts.textarea
   .text(originalContent)
   .on('keydown',function(evt) {
-    if (!evt.shiftKey) {
+    if (!evt.shiftKey || elmts.textarea.is(':focus')) {
       if (evt.key == "Enter") {
         if (evt.ctrlKey) {
           elmts.okallButton.trigger('click');

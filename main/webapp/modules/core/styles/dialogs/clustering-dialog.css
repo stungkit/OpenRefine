@@ -31,15 +31,41 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+#clusterButtonId {
+  margin-left: 0.5em;
+}
+
+.clustering-dialog-control-group {
+  display: flex;
+  align-items: baseline;
+}
+.clustering-dialog-control-group .button {
+  margin-left: .25em;
+}
+
+#methodSelectorId {
+  margin-left: .25em;
+}
+
 .clustering-dialog-body {
   padding: 15px 15px 0 15px;
 }
 
 .clustering-dialog-control-row {
   margin: 1em 0;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  align-items: baseline;
+  background: #eee;
+  border: 1px #ccc solid;
+  padding: 0.25em;
+  gap: 0.25em;
+}
+
+.control-group {
   display: flex;
-  flex-flow: row;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: baseline;
 }
 
 .clustering-dialog-facet-row {

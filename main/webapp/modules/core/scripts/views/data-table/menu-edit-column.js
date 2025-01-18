@@ -44,7 +44,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
 	        repeatCount: repeatCount
 	      },
 	      { expression: expression },
-	      { cellsChanged: true },
+	      { cellsChanged: true, rowIdsPreserved: true },
 	      callbacks
 	    );
 	  };
@@ -95,7 +95,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           onError: $('input[name="create-column-dialog-onerror-choice"]:checked')[0].value
         },
         { expression: previewWidget.getExpression(true) },
-        { modelsChanged: true },
+        { modelsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
         {
           onDone: function(o) {
             dismiss();
@@ -123,16 +123,6 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
     elmts.or_views_storeErr.text($.i18n('core-views/store-err'));
     elmts.or_views_cacheResponses.text($.i18n('core-views/cache-responses'));
     elmts.or_views_httpHeaders.text($.i18n('core-views/http-headers'));
-    elmts.or_views_httpHeadersShowHide.text($.i18n('core-views/show'));
-    elmts.or_views_httpHeadersShowHide.on('click',function() {
-                                                          $( ".set-httpheaders-container" ).toggle( "slow", function() {
-                                                            if ($(this).is(':visible')) {
-                                                              elmts.or_views_httpHeadersShowHide.text($.i18n('core-views/hide'));
-                                                            } else {
-                                                              elmts.or_views_httpHeadersShowHide.text($.i18n('core-views/show'));
-                                                            }
-                                                          });
-                                                        });
     elmts.or_views_urlFetch.text($.i18n('core-views/url-fetch'));
     elmts.okButton.html($.i18n('core-buttons/ok'));
     elmts.cancelButton.text($.i18n('core-buttons/cancel'));
@@ -176,9 +166,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           httpHeaders: JSON.stringify(elmts.setHttpHeadersContainer.find("input").serializeArray())
         },
         null,
-        { modelsChanged: true }
+        { modelsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
+        { onDone: dismiss }
       );
-      dismiss();
     });
   };
 
@@ -216,7 +206,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         columnName: column.name
       },
       null,
-      { modelsChanged: true }
+      { modelsChanged: true, rowIdsPreserved: true }
     );
   };
 
@@ -250,7 +240,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
               newColumnName: newColumnName
             },
             null,
-            {modelsChanged: true},
+            {modelsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true},
             {
               onDone: function () {
                 dismiss();
@@ -271,7 +261,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         index: index
       },
       null,
-      { modelsChanged: true }
+      { modelsChanged: true, rowIdsPreserved: true }
     );
   };
 
@@ -285,7 +275,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
             index: newidx
           },
           null,
-          { modelsChanged: true }
+          { modelsChanged: true, rowIdsPreserved: true }
       );
     }
   };
@@ -368,9 +358,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         "split-column", 
         config,
         null,
-        { modelsChanged: true }
+        { modelsChanged: true },
+        { onDone: dismiss }
       );
-      dismiss();
     });
   }; 
   
@@ -409,7 +399,6 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       // function called in a callback
       var deleteColumns = function() {
         if (deleteJoinedColumns) {
-          console.log (theProject);
           var columnsToKeep = theProject.columnModel.columns
           .map (function (col) {return col.name;})
           .filter (function(colName) {
@@ -422,7 +411,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
               "reorder-columns",
               null,
               { "columnNames" : JSON.stringify(columnsToKeep) }, 
-              { modelsChanged: true },
+              { modelsChanged: true, rowIdsPreserved: true },
               { includeEngine: false }
           );
         }
@@ -475,8 +464,8 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           onError: onError
           },
           { expression: expression },
-          { modelsChanged: true },
-          { onFinallyDone: deleteColumns}
+          { modelsChanged: true, rowIdsPreserved: true, recordIdsPreserved: true },
+          { onDone: dismiss, onFinallyDone: deleteColumns}
         );
       } 
       else {
@@ -486,7 +475,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
             onError,
             repeat,
             repeatCount,
-            { onFinallyDone: deleteColumns});
+            { onDone: dismiss, onFinallyDone: deleteColumns});
       }
     };
     // core of doJoinColumn
@@ -559,7 +548,6 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       });
     elmts.okButton.on('click',function() {
       transform();
-      dismiss();
     });
     elmts.cancelButton.on('click',function() {
       dismiss();

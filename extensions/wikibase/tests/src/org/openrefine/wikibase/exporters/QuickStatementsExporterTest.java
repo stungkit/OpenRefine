@@ -27,20 +27,12 @@ package org.openrefine.wikibase.exporters;
 import static org.testng.Assert.assertEquals;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
-import org.openrefine.wikibase.schema.WikibaseSchema;
-import org.openrefine.wikibase.schema.strategies.StatementEditingMode;
-import org.openrefine.wikibase.schema.strategies.StatementMerger;
-import org.openrefine.wikibase.schema.validation.ValidationState;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.testing.WikidataRefineTest;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
-import org.openrefine.wikibase.updates.StatementEdit;
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.interfaces.Claim;
@@ -54,6 +46,16 @@ import org.wikidata.wdtk.datamodel.interfaces.StatementRank;
 
 import com.google.refine.browsing.Engine;
 import com.google.refine.model.Project;
+
+import org.openrefine.wikibase.schema.WikibaseSchema;
+import org.openrefine.wikibase.schema.strategies.StatementEditingMode;
+import org.openrefine.wikibase.schema.strategies.StatementMerger;
+import org.openrefine.wikibase.schema.validation.ValidationState;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.testing.WikidataRefineTest;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.StatementEdit;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public class QuickStatementsExporterTest extends WikidataRefineTest {
 
@@ -71,7 +73,8 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
 
     @Test
     public void testSimpleProject() throws IOException {
-        Project project = this.createCSVProject(TestingData.inceptionWithNewCsv);
+        Project project = createProject(TestingData.inceptionColumns,
+                TestingData.inceptionProjectGridWithNewItem);
         TestingData.reconcileInceptionCells(project);
         String serialized = TestingData.jsonFromFile("schema/inception.json");
         WikibaseSchema schema = WikibaseSchema.reconstruct(serialized);
@@ -89,6 +92,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
     public void testImpossibleScheduling() throws IOException {
         StatementEdit sNewAtoNewB = TestingData.generateStatementAddition(newIdA, newIdB);
         TermedStatementEntityEdit update = new ItemEditBuilder(newIdA).addStatement(sNewAtoNewB)
+                .addContributingRowId(123)
                 .build();
 
         assertEquals(QuickStatementsExporter.impossibleSchedulingErrorMessage, export(update));
@@ -102,7 +106,9 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
          */
         TermedStatementEntityEdit update = new ItemEditBuilder(qid1)
                 .addLabel(Datamodel.makeMonolingualTextValue("some label", "en"), true)
-                .addDescription(Datamodel.makeMonolingualTextValue("some description", "en"), true).build();
+                .addDescription(Datamodel.makeMonolingualTextValue("some description", "en"), true)
+                .addContributingRowId(123)
+                .build();
 
         assertEquals("Q1377\tLen\t\"some label\"\n" + "Q1377\tDen\t\"some description\"\n", export(update));
     }
@@ -112,7 +118,9 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
         TermedStatementEntityEdit update = new ItemEditBuilder(newIdA)
                 .addLabel(Datamodel.makeMonolingualTextValue("my new item", "en"), false)
                 .addDescription(Datamodel.makeMonolingualTextValue("isn't it awesome?", "en"), false)
-                .addAlias(Datamodel.makeMonolingualTextValue("fabitem", "en")).build();
+                .addAlias(Datamodel.makeMonolingualTextValue("fabitem", "en"))
+                .addContributingRowId(123)
+                .build();
 
         assertEquals("CREATE\n" + "LAST\tLen\t\"my new item\"\n" + "LAST\tDen\t\"isn't it awesome?\"\n"
                 + "LAST\tAen\t\"fabitem\"\n", export(update));
@@ -123,6 +131,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
         TermedStatementEntityEdit update = new ItemEditBuilder(qid1)
                 .addStatement(new StatementEdit(TestingData.generateStatement(qid1, qid2),
                         StatementMerger.FORMER_DEFAULT_STRATEGY, StatementEditingMode.DELETE))
+                .addContributingRowId(123)
                 .build();
 
         assertEquals("- Q1377\tP38\tQ865528\n", export(update));
@@ -140,7 +149,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
         Statement statement = Datamodel.makeStatement(claim, Collections.emptyList(), StatementRank.NORMAL, "");
         StatementEdit statementUpdate = new StatementEdit(statement, StatementMerger.FORMER_DEFAULT_STRATEGY,
                 StatementEditingMode.ADD_OR_MERGE);
-        TermedStatementEntityEdit update = new ItemEditBuilder(qid1).addStatement(statementUpdate).build();
+        TermedStatementEntityEdit update = new ItemEditBuilder(qid1).addStatement(statementUpdate).addContributingRowId(123).build();
 
         assertEquals("Q1377\tP38\tQ865528\tP38\tQ1377\n", export(update));
     }
@@ -154,6 +163,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
                 StatementEditingMode.ADD_OR_MERGE);
 
         TermedStatementEntityEdit update = new ItemEditBuilder(qid1).addStatement(statementUpdate)
+                .addContributingRowId(123)
                 .build();
 
         assertEquals("Q1377\tP123\tsomevalue\n", export(update));
@@ -168,6 +178,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
                 StatementEditingMode.ADD_OR_MERGE);
 
         TermedStatementEntityEdit update = new ItemEditBuilder(qid1).addStatement(statementUpdate)
+                .addContributingRowId(123)
                 .build();
 
         assertEquals("Q1377\tP123\tnovalue\n", export(update));
@@ -199,6 +210,7 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
                 StatementEditingMode.ADD_OR_MERGE);
 
         TermedStatementEntityEdit update = new ItemEditBuilder(qid1).addStatement(statementUpdate)
+                .addContributingRowId(123)
                 .build();
 
         assertEquals(
@@ -208,7 +220,11 @@ public class QuickStatementsExporterTest extends WikidataRefineTest {
 
     @Test
     public void testNoSchema() throws IOException {
-        Project project = this.createCSVProject("a,b\nc,d");
+        Project project = this.createProject(
+                new String[] { "a", "b" },
+                new Serializable[][] {
+                        { "c", "d" }
+                });
         Engine engine = new Engine(project);
         StringWriter writer = new StringWriter();
         Properties properties = new Properties();

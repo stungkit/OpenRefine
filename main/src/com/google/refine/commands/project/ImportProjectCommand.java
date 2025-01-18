@@ -37,7 +37,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Properties;
+import java.util.Map;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -70,7 +70,7 @@ public class ImportProjectCommand extends Command {
 
         ProjectManager.singleton.setBusy(true);
         try {
-            Properties options = ParsingUtilities.parseUrlParameters(request);
+            Map<String, String> options = ParsingUtilities.parseParameters(request);
 
             long projectID = Project.generateID();
             logger.info("Importing existing project using new ID {}", projectID);
@@ -82,7 +82,7 @@ public class ImportProjectCommand extends Command {
             ProjectMetadata pm = ProjectManager.singleton.getProjectMetadata(projectID);
             if (pm != null) {
                 if (options.containsKey("project-name")) {
-                    String projectName = options.getProperty("project-name");
+                    String projectName = options.get("project-name");
                     if (projectName != null && projectName.length() > 0) {
                         pm.setName(projectName);
                     }
@@ -101,7 +101,7 @@ public class ImportProjectCommand extends Command {
 
     protected void internalImport(
             HttpServletRequest request,
-            Properties options,
+            Map<String, String> options,
             long projectID) throws Exception {
 
         String url = null;
@@ -113,34 +113,29 @@ public class ImportProjectCommand extends Command {
             FileItemStream item = iter.next();
             String name = item.getFieldName().toLowerCase();
             InputStream stream = item.openStream();
-            if (item.isFormField()) {
-                if (name.equals("url")) {
-                    url = Streams.asString(stream);
-                } else {
-                    options.put(name, Streams.asString(stream));
-                }
-            } else {
+            if (name.equals("project-file")) {
                 String fileName = item.getName().toLowerCase();
+                if (fileName.isEmpty()) continue;
                 try {
                     ProjectManager.singleton.importProject(projectID, stream, !fileName.endsWith(".tar"));
                 } finally {
                     stream.close();
                 }
+            } else if (name.equals("project-url")) {
+                url = Streams.asString(stream);
+            } else {
+                options.put(name, Streams.asString(stream));
             }
         }
 
         if (url != null && url.length() > 0) {
-            internalImportURL(request, options, projectID, url);
+            internalImportURL(projectID, url);
         }
     }
 
-    protected void internalImportURL(
-            HttpServletRequest request,
-            Properties options,
-            long projectID,
-            String urlString) throws Exception {
+    protected void internalImportURL(long projectID, String urlString) throws Exception {
         URL url = new URL(urlString);
-        URLConnection connection = null;
+        URLConnection connection;
 
         try {
             connection = url.openConnection();
@@ -150,7 +145,7 @@ public class ImportProjectCommand extends Command {
             throw new Exception("Cannot connect to " + urlString, e);
         }
 
-        InputStream inputStream = null;
+        InputStream inputStream;
         try {
             inputStream = connection.getInputStream();
         } catch (Exception e) {

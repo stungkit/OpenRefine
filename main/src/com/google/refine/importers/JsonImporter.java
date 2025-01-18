@@ -39,14 +39,13 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonParser.NumberType;
 import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
@@ -54,6 +53,9 @@ import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.refine.ProjectMetadata;
 import com.google.refine.importers.tree.ImportColumnGroup;
 import com.google.refine.importers.tree.TreeImportingParserBase;
@@ -90,7 +92,8 @@ public class JsonImporter extends TreeImportingParserBase {
             try {
                 ObjectNode firstFileRecord = fileRecords.get(0);
                 File file = ImportingUtilities.getFile(job, firstFileRecord);
-                JsonFactory factory = new JsonFactory();
+                JsonFactory factory = JsonFactory.builder().enable(JsonReadFeature.ALLOW_JAVA_COMMENTS)
+                        .enable(JsonReadFeature.ALLOW_YAML_COMMENTS).enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION).build();
                 JsonParser parser = factory.createParser(file);
                 parser.enable(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS);
 
@@ -101,6 +104,7 @@ public class JsonImporter extends TreeImportingParserBase {
                 }
             } catch (IOException e) {
                 logger.error("Error generating parser UI initialization data for JSON file", e);
+                JSONUtilities.safePut(options, "error", e.toString());
             }
         }
 
@@ -139,63 +143,51 @@ public class JsonImporter extends TreeImportingParserBase {
         return null;
     }
 
-    final static private JsonNode parseForPreview(JsonParser parser, PreviewParsingState state) {
-        try {
-            JsonToken token = parser.nextToken();
-            state.tokenCount++;
-            return parseForPreview(parser, state, token);
-        } catch (IOException e) {
-            return null;
-        }
+    final static private JsonNode parseForPreview(JsonParser parser, PreviewParsingState state) throws IOException {
+        JsonToken token = parser.nextToken();
+        state.tokenCount++;
+        return parseForPreview(parser, state, token);
     }
 
-    final static private ObjectNode parseObjectForPreview(JsonParser parser, PreviewParsingState state) {
+    final static private ObjectNode parseObjectForPreview(JsonParser parser, PreviewParsingState state) throws IOException {
         ObjectNode result = ParsingUtilities.mapper.createObjectNode();
         loop: while (state.tokenCount < PREVIEW_PARSING_LIMIT) {
-            try {
-                JsonToken token = parser.nextToken();
-                if (token == null) {
-                    break;
-                }
-                state.tokenCount++;
-
-                switch (token) {
-                    case FIELD_NAME:
-                        String fieldName = parser.getText();
-                        JsonNode fieldValue = parseForPreview(parser, state);
-                        JSONUtilities.safePut(result, fieldName, fieldValue);
-                        break;
-                    case END_OBJECT:
-                        break loop;
-                    default:
-                        break loop;
-                }
-            } catch (IOException e) {
+            JsonToken token = parser.nextToken();
+            if (token == null) {
                 break;
+            }
+            state.tokenCount++;
+
+            switch (token) {
+                case FIELD_NAME:
+                    String fieldName = parser.getText();
+                    JsonNode fieldValue = parseForPreview(parser, state);
+                    JSONUtilities.safePut(result, fieldName, fieldValue);
+                    break;
+                case END_OBJECT:
+                    break loop;
+                default:
+                    break loop;
             }
         }
         return result;
     }
 
-    final static private ArrayNode parseArrayForPreview(JsonParser parser, PreviewParsingState state) {
+    final static private ArrayNode parseArrayForPreview(JsonParser parser, PreviewParsingState state) throws IOException {
         ArrayNode result = ParsingUtilities.mapper.createArrayNode();
         loop: while (state.tokenCount < PREVIEW_PARSING_LIMIT) {
-            try {
-                JsonToken token = parser.nextToken();
-                if (token == null) {
-                    break;
-                }
-                state.tokenCount++;
-
-                switch (token) {
-                    case END_ARRAY:
-                        break loop;
-                    default:
-                        JsonNode element = parseForPreview(parser, state, token);
-                        result.add(element);
-                }
-            } catch (IOException e) {
+            JsonToken token = parser.nextToken();
+            if (token == null) {
                 break;
+            }
+            state.tokenCount++;
+
+            switch (token) {
+                case END_ARRAY:
+                    break loop;
+                default:
+                    JsonNode element = parseForPreview(parser, state, token);
+                    result.add(element);
             }
         }
         return result;
@@ -206,8 +198,12 @@ public class JsonImporter extends TreeImportingParserBase {
             ImportingJob job, String fileSource, InputStream is,
             ImportColumnGroup rootColumnGroup, int limit, ObjectNode options, List<Exception> exceptions) {
 
+        JSONTreeReader jsonTreeReader = new JSONTreeReader(is);
+        jsonTreeReader.parser.enable(JsonParser.Feature.ALLOW_COMMENTS);
+        jsonTreeReader.parser.enable(JsonParser.Feature.ALLOW_YAML_COMMENTS);
+
         parseOneFile(project, metadata, job, fileSource,
-                new JSONTreeReader(is), rootColumnGroup, limit, options, exceptions);
+                jsonTreeReader, rootColumnGroup, limit, options, exceptions);
     }
 
     static public class JSONTreeReader implements TreeReader {

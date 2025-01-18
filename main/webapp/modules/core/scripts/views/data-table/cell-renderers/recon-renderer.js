@@ -43,70 +43,136 @@ class ReconCellRenderer {
         .on('click',function(evt) {
           self.doRematch(rowIndex, cellIndex, cell, cellUI);
         });
-      } else {
-        $('<span>').text(cell.v).appendTo(divContentRecon);
+      } else if (r.j != "matched" && r.e!=null)
+        { var divContent = document.createElement('div');
+          var cellcontent = document.createElement('span');
 
+          cellcontent.textContent = cell.v;
+          var lineBreak = document.createElement('br');
+          cellcontent.appendChild(lineBreak);
+          divContent.appendChild(cellcontent);
+          
+          var errorSpan = document.createElement('span');
+          errorSpan.className = 'data-table-error';
+          errorSpan.textContent = r.e;
+          divContent.appendChild(errorSpan);
+          $('<span>').text(divContent).appendTo(divContentRecon);
+
+          var addSuggest = false;
+          if ((service) && (service.suggest) && (service.suggest.entity)) {
+            suggestOptions = service.suggest.entity;
+            if ('view' in service && 'url' in service.view && !('view_url' in suggestOptions)) {
+              suggestOptions.view_url = service.view.url;
+            }
+            // CORS / JSONP support
+            if (service.ui && service.ui.access) {
+              suggestOptions.access = service.ui.access;
+            }
+            addSuggest = true;
+          }
+
+          var extraChoices = $('<div>').addClass("data-table-error-extra").appendTo(divContent);
+
+          if (addSuggest) {
+            $('<a href="javascript:{}"></a>')
+            .on('click',function(evt) {
+              self.searchForMatch(suggestOptions, rowIndex, cellIndex, cell, cellUI);
+              return false;
+            })
+            .text($.i18n('core-views/search-match'))
+            .appendTo(extraChoices);
+          }
+        }
+
+      else {
+        $('<span>').text(cell.v).appendTo(divContentRecon);
         if (cellUI._dataTableView._showRecon) {
           var ul = $('<div></div>').addClass("data-table-recon-candidates").appendTo(divContentRecon);
-          if ("c" in r && r.c.length > 0) {
-            var candidates = r.c;
-            var renderCandidate = function(candidate, index) {
-              var li = $('<div></div>').addClass("data-table-recon-candidate").appendTo(ul);
-              var liSpan = $('<span></span>').appendTo(li);
-
-              $('<a href="javascript:{}">&nbsp;</a>')
-              .addClass("data-table-recon-match-similar")
-              .attr("title", $.i18n('core-views/match-all-cells'))
-              .appendTo(liSpan).on('click',function(evt) {
-                self.doMatchTopicToSimilarCells(candidate, cellIndex, cell);
-              });
-
-              $('<a href="javascript:{}">&nbsp;</a>')
-              .addClass("data-table-recon-match")
-              .attr("title", $.i18n('core-views/match-this-cell') )
-              .appendTo(liSpan).on('click',function(evt) {
-                self.doMatchTopicToOneCell(candidate, rowIndex, cellIndex, cell, cellUI);
-              });
-
-              var a = $('<a></a>')
-              .addClass("data-table-recon-topic")
-              .attr("target", "_blank")
-              .text(_.unescape(candidate.name)) // TODO: only use of _.unescape - consolidate
-              .appendTo(liSpan);
-
-              if ((service) && (service.view) && (service.view.url)) {
-                a.attr("href", encodeURI(service.view.url.replace("{{id}}", candidate.id)));
-              }
-
-              self.previewOnHover(service, candidate, liSpan.parent(), liSpan, true, rowIndex, cellIndex, cell);
-
-              var score;
-              if (candidate.score < 1) {
-                score = Math.round(candidate.score * 1000) / 1000;
-              } else {
-                score = Math.round(candidate.score);
-              }
-              $('<span></span>').addClass("data-table-recon-score").text("(" + score + ")").appendTo(liSpan);
-            };
-
-            for (var i = 0; i < candidates.length; i++) {
-              renderCandidate(candidates[i], i);
+          var candidates = r.c || [];
+          var visibleCandidates = 3;
+          var renderCandidate = function(candidate, index) {
+            var li = $('<div></div>').addClass("data-table-recon-candidate").appendTo(ul);
+            
+            if (index >= visibleCandidates) {
+              li.hide();
             }
+            var liSpan = $('<span></span>').appendTo(li);
+
+            $('<a href="javascript:{}">&nbsp;</a>')
+            .addClass("data-table-recon-match")
+            .attr("title", $.i18n('core-views/match-this-cell') )
+            .appendTo(liSpan).on('click',function(evt) {
+              self.doMatchTopicToOneCell(candidate, rowIndex, cellIndex, cell, cellUI);
+            });
+
+            $('<a href="javascript:{}">&nbsp;</a>')
+            .addClass("data-table-recon-match-similar")
+            .attr("title", $.i18n('core-views/match-all-cells'))
+            .appendTo(liSpan).on('click',function(evt) {
+              self.doMatchTopicToSimilarCells(candidate, cellIndex, cell);
+            });
+
+            var a = $('<a></a>')
+            .addClass("data-table-recon-topic")
+            .attr("target", "_blank")
+            .text(_.unescape(candidate.name)) // TODO: only use of _.unescape - consolidate
+            .appendTo(liSpan);
+
+            if ((service) && (service.view) && (service.view.url)) {
+              a.attr("href", encodeURI(service.view.url.replace("{{id}}", candidate.id)));
+            }
+
+            self.previewOnHover(service, candidate, liSpan.parent(), liSpan, true, rowIndex, cellIndex, cell, cellUI);
+
+            var score;
+            if (candidate.score < 1) {
+              score = Math.round(candidate.score * 1000) / 1000;
+            } else {
+              score = Math.round(candidate.score);
+            }
+            $('<span></span>').addClass("data-table-recon-score").text("(" + score + ")").appendTo(liSpan);
+          };
+          var visibilityChoices = $('<div>').addClass("data-table-recon-visibility").appendTo(divContentRecon);
+          if (candidates.length > visibleCandidates) {
+            var isExpanded = false; // Variable to track visibility state
+            var seeMoreLink = $('<a href="javascript:{}"></a>')
+            .on('click', function(evt) {
+              var link = $(this);
+              isExpanded = !isExpanded; // Toggle visibility state
+              if (isExpanded) {
+                ul.find('.data-table-recon-candidate').show(); // Show all candidates
+                seeMoreLink.text($.i18n('core-views/see-less')); // Change link text to "See Less"
+
+              } 
+              else {
+                ul.find('.data-table-recon-candidate:not(:lt(' + visibleCandidates + '))').hide();
+                ul.find('.data-table-recon-candidate:last').show();
+                seeMoreLink.text($.i18n('core-views/see-more')); // Change link text to "See More"
+              }
+              return false;  
+            })
+            .text($.i18n('core-views/see-more'))
+            .appendTo(visibilityChoices);
+            seeMoreLink.after(" | ");
+          }
+          for (var i = 0; i < candidates.length; i++) {
+            renderCandidate(candidates[i], i);
           }
 
           var liNew = $('<div></div>').addClass("data-table-recon-candidate").appendTo(ul);
-          $('<a href="javascript:{}">&nbsp;</a>')
-          .addClass("data-table-recon-match-similar")
-          .attr("title", $.i18n('core-views/create-topic-cells'))
-          .appendTo(liNew).on('click',function(evt) {
-            self.doMatchNewTopicToSimilarCells(cellIndex, cell);
-          });
 
           $('<a href="javascript:{}">&nbsp;</a>')
           .addClass("data-table-recon-match")
           .attr("title", $.i18n('core-views/create-topic-cell'))
           .appendTo(liNew).on('click',function(evt) {
             self.doMatchNewTopicToOneCell(rowIndex, cellIndex, cell, cellUI);
+          });
+
+          $('<a href="javascript:{}">&nbsp;</a>')
+          .addClass("data-table-recon-match-similar")
+          .attr("title", $.i18n('core-views/create-topic-cells'))
+          .appendTo(liNew).on('click',function(evt) {
+            self.doMatchNewTopicToSimilarCells(cellIndex, cell);
           });
 
           $('<span>').text($.i18n('core-views/create-topic')).appendTo(liNew);
@@ -124,8 +190,7 @@ class ReconCellRenderer {
             }
             addSuggest = true;
           }
-
-          var extraChoices = $('<div>').addClass("data-table-recon-extra").appendTo(divContentRecon);
+          var extraChoices = $('<div>').addClass("data-table-recon-extra").appendTo(visibilityChoices);
           if (addSuggest) {
             $('<a href="javascript:{}"></a>')
             .on('click',function(evt) {
@@ -136,9 +201,11 @@ class ReconCellRenderer {
             .appendTo(extraChoices);
           }
         }
-      }
+      }//end of else
+
       return divContent;
     }
+
   }
 
   doRematch(rowIndex, cellIndex, cell, cellUI) {
@@ -246,7 +313,6 @@ class ReconCellRenderer {
   		elmts.radioSimilar[0].setAttribute("checked", false);
   		elmts.radioOne[0].setAttribute("checked", true);
   	}
-
     var level = DialogSystem.showDialog(frame);
     var dismiss = function() {
   	reconMatchSilimilarCellsByDefault = elmts.radioSimilar[0].checked;
@@ -319,7 +385,7 @@ class ReconCellRenderer {
     }
     var suggest = elmts.input
     .val(cell.v)
-    .suggest(suggestOptions2);
+    .suggest(sanitizeSuggestOptions(suggestOptions2));
 
     suggest.on("fb-pane-show", function(e, data) {
       DialogSystem.pauseEscapeKeyHandling();
@@ -345,7 +411,7 @@ class ReconCellRenderer {
       command,
       params,
       bodyParams,
-      { columnStatsChanged: columnStatsChanged },
+      { columnStatsChanged: columnStatsChanged, rowIdsPreserved: true, recordIdsPreserved: true },
       {
         onDone: function(o) {
           if (o.cell.r) {
@@ -365,7 +431,7 @@ class ReconCellRenderer {
       command,
       params,
       bodyParams,
-      { cellsChanged: true, columnStatsChanged: columnStatsChanged }
+      { cellsChanged: true, columnStatsChanged: columnStatsChanged, rowIdsPreserved: true, recordIdsPreserved: true }
     );
   }
 
@@ -388,6 +454,7 @@ class ReconCellRenderer {
       .width(preview.width)
       .height(preview.height)
       .attr("src", url)
+      .attr("sandbox", "")
       .appendTo(fakeMenu);
     } else {
       return; // no preview service available

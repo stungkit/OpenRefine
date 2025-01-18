@@ -28,6 +28,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.wikidata.wdtk.datamodel.helpers.Datamodel;
+import org.wikidata.wdtk.datamodel.helpers.DatamodelConverter;
+import org.wikidata.wdtk.datamodel.implementation.DataObjectFactoryImpl;
+import org.wikidata.wdtk.datamodel.implementation.EntityIdValueImpl;
+import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.ItemIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.MediaInfoIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
+import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
+
 import org.openrefine.wikibase.schema.entityvalues.ReconEntityIdValue;
 import org.openrefine.wikibase.schema.entityvalues.ReconItemIdValue;
 import org.openrefine.wikibase.schema.entityvalues.ReconMediaInfoIdValue;
@@ -38,15 +48,6 @@ import org.openrefine.wikibase.updates.ItemEdit;
 import org.openrefine.wikibase.updates.MediaInfoEdit;
 import org.openrefine.wikibase.updates.StatementEdit;
 import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.wikidata.wdtk.datamodel.helpers.Datamodel;
-import org.wikidata.wdtk.datamodel.helpers.DatamodelConverter;
-import org.wikidata.wdtk.datamodel.implementation.DataObjectFactoryImpl;
-import org.wikidata.wdtk.datamodel.implementation.EntityIdValueImpl;
-import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.ItemIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.MediaInfoIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
-import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
 
 /**
  * A class that rewrites an {@link TermedStatementEntityEdit}, replacing reconciled entity id values by their concrete
@@ -186,7 +187,8 @@ public class ReconEntityRewriter extends DatamodelConverter {
                 Set<MonolingualTextValue> aliases = update.getAliases().stream().map(l -> copy(l)).collect(Collectors.toSet());
                 List<StatementEdit> statements = update.getStatementEdits().stream().map(l -> copy(l))
                         .collect(Collectors.toList());
-                return new ItemEdit(subject, statements, labels, labelsIfNew, descriptions, descriptionsIfNew, aliases);
+                return new ItemEdit(subject, statements, labels, labelsIfNew, descriptions, descriptionsIfNew, aliases,
+                        edit.getContributingRowIds());
             } else if (edit instanceof MediaInfoEdit) {
                 MediaInfoEdit update = (MediaInfoEdit) edit;
                 Set<MonolingualTextValue> labels = update.getLabels().stream().map(l -> copy(l)).collect(Collectors.toSet());
@@ -194,7 +196,7 @@ public class ReconEntityRewriter extends DatamodelConverter {
                 List<StatementEdit> statements = update.getStatementEdits().stream().map(l -> copy(l))
                         .collect(Collectors.toList());
                 return new MediaInfoEdit(subject, statements, labels, labelsIfNew, update.getFilePath(),
-                        update.getFileName(), update.getWikitext(), update.isOverridingWikitext());
+                        update.getFileName(), update.getWikitext(), update.isOverridingWikitext(), edit.getContributingRowIds());
             } else {
                 throw new IllegalStateException(
                         "Rewriting of entities of this type (for subject id " + edit.getEntityId() + ") not supported yet");

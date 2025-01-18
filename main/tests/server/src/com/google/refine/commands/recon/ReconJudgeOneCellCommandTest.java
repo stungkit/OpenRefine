@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.util.Collections;
 
 import javax.servlet.http.HttpServletRequest;
@@ -45,7 +46,6 @@ import org.testng.annotations.Test;
 import com.google.refine.ProjectManager;
 import com.google.refine.RefineTest;
 import com.google.refine.commands.Command;
-import com.google.refine.commands.recon.ReconJudgeOneCellCommand;
 import com.google.refine.model.Cell;
 import com.google.refine.model.Column;
 import com.google.refine.model.Project;
@@ -62,11 +62,13 @@ public class ReconJudgeOneCellCommandTest extends RefineTest {
     PrintWriter writer = null;
 
     @BeforeMethod
-    public void setUp() {
-        project = createCSVProject(
-                "reconciled column,unreconciled column\n" +
-                        "a,b\n" +
-                        "c,d\n");
+    public void setUp() throws IOException {
+        project = createProject(
+                new String[] { "reconciled column", "unreconciled column" },
+                new Serializable[][] {
+                        { "a", "b" },
+                        { "c", "d" }
+                });
         Column reconciled = project.columnModel.columns.get(0);
         ReconConfig config = new StandardReconConfig(
                 "http://my.recon.service/api",
@@ -86,11 +88,7 @@ public class ReconJudgeOneCellCommandTest extends RefineTest {
         when(request.getParameter("csrf_token")).thenReturn(Command.csrfFactory.getFreshToken());
 
         writer = mock(PrintWriter.class);
-        try {
-            when(response.getWriter()).thenReturn(writer);
-        } catch (IOException e1) {
-            Assert.fail();
-        }
+        when(response.getWriter()).thenReturn(writer);
 
         command = new ReconJudgeOneCellCommand();
     }

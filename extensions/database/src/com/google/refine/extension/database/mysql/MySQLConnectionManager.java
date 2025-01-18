@@ -105,7 +105,7 @@ public class MySQLConnectionManager {
 
         } catch (SQLException e) {
             logger.error("Test connection Failed!", e);
-            throw new DatabaseServiceException(true, e.getSQLState(), e.getErrorCode(), e.getMessage());
+            throw new DatabaseServiceException(e);
         }
 
     }
@@ -129,7 +129,7 @@ public class MySQLConnectionManager {
                     return connection;
                 }
             }
-            String dbURL = getDatabaseUrl(databaseConfiguration);
+            String dbURL = databaseConfiguration.toURI().toString();
             Class.forName(type.getClassPath());
 
             // logger.info("*** type.getClassPath() ::{}, {}**** ", type.getClassPath());
@@ -150,7 +150,7 @@ public class MySQLConnectionManager {
             throw new DatabaseServiceException(e.getMessage());
         } catch (SQLException e) {
             logger.error("SQLException::Couldn't get a Connection!", e);
-            throw new DatabaseServiceException(true, e.getSQLState(), e.getErrorCode(), e.getMessage());
+            throw new DatabaseServiceException(e);
         }
     }
 
@@ -166,11 +166,4 @@ public class MySQLConnectionManager {
 
     }
 
-    private String getDatabaseUrl(DatabaseConfiguration dbConfig) {
-
-        int port = dbConfig.getDatabasePort();
-        return "jdbc:" + dbConfig.getDatabaseType() + "://" + dbConfig.getDatabaseHost()
-                + ((port == 0) ? "" : (":" + port)) + "/" + dbConfig.getDatabaseName() + "?useSSL=" + dbConfig.isUseSSL();
-
-    }
 }

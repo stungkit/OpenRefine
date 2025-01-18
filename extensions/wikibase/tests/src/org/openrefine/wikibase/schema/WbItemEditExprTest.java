@@ -26,12 +26,6 @@ package org.openrefine.wikibase.schema;
 
 import java.util.Collections;
 
-import org.openrefine.wikibase.qa.QAWarning;
-import org.openrefine.wikibase.qa.QAWarning.Severity;
-import org.openrefine.wikibase.testing.JacksonSerializationTest;
-import org.openrefine.wikibase.updates.ItemEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
-import org.openrefine.wikibase.updates.StatementEdit;
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
@@ -40,6 +34,13 @@ import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
 import com.google.refine.model.Column;
 import com.google.refine.model.ColumnModel;
 import com.google.refine.model.ModelException;
+
+import org.openrefine.wikibase.qa.QAWarning;
+import org.openrefine.wikibase.qa.QAWarning.Severity;
+import org.openrefine.wikibase.testing.JacksonSerializationTest;
+import org.openrefine.wikibase.updates.ItemEdit;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.StatementEdit;
 
 public class WbItemEditExprTest extends WbExpressionTest<ItemEdit> {
 
@@ -82,7 +83,10 @@ public class WbItemEditExprTest extends WbExpressionTest<ItemEdit> {
     @Test
     public void testEvaluate() {
         setRow(recon("Q3434"), "2010-07-23", "3.898,4.389", "my alias", recon("Q23"));
-        ItemEdit result = new ItemEditBuilder(subject).addAlias(alias).addStatement(fullStatement)
+        ItemEdit result = new ItemEditBuilder(subject)
+                .addAlias(alias)
+                .addStatement(fullStatement)
+                .addContributingRowId(123)
                 .build();
         evaluatesTo(result, expr);
     }
@@ -104,14 +108,17 @@ public class WbItemEditExprTest extends WbExpressionTest<ItemEdit> {
     @Test
     public void testStatementSkipped() {
         setRow(recon("Q3434"), "2010-07-23", "3.898,invalid4.389", "my alias", recon("Q23"));
-        ItemEdit result = new ItemEditBuilder(subject).addAlias(alias).build();
+        ItemEdit result = new ItemEditBuilder(subject)
+                .addAlias(alias)
+                .addContributingRowId(123)
+                .build();
         evaluatesTo(result, expr);
     }
 
     @Test
     public void testAliasSkipped() {
         setRow(recon("Q3434"), "2010-07-23", "3.898,4.389", "", recon("Q23"));
-        ItemEdit result = new ItemEditBuilder(subject).addStatement(fullStatement).build();
+        ItemEdit result = new ItemEditBuilder(subject).addStatement(fullStatement).addContributingRowId(123).build();
         evaluatesTo(result, expr);
     }
 

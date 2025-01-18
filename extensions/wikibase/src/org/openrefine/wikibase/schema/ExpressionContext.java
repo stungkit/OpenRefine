@@ -26,14 +26,15 @@ package org.openrefine.wikibase.schema;
 
 import java.util.Map;
 
-import org.apache.commons.lang.Validate;
-import org.openrefine.wikibase.qa.QAWarning;
-import org.openrefine.wikibase.qa.QAWarningStore;
+import org.apache.commons.lang3.Validate;
 
 import com.google.refine.model.Cell;
 import com.google.refine.model.Column;
 import com.google.refine.model.ColumnModel;
 import com.google.refine.model.Row;
+
+import org.openrefine.wikibase.qa.QAWarning;
+import org.openrefine.wikibase.qa.QAWarningStore;
 
 /**
  * A class holding all the necessary information about the context in which a schema expression is evaluated.

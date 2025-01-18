@@ -31,6 +31,28 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
 
+function serviceLogoFromReconConfig(reconConfig) {
+  var serviceUrl = null;
+  var service = null;
+  var serviceLogo = null;
+  if (reconConfig) {
+    serviceUrl = reconConfig.service;
+  }
+  if (serviceUrl) {
+    service = ReconciliationManager.getServiceFromUrl(serviceUrl);
+  }
+  if (service) {
+    serviceLogo = service.logo;
+  }
+  if (serviceLogo) {
+    try {
+        return new URL(serviceLogo);  
+    } catch {
+        console.warn("Invalid logo URL supplied by service "+serviceUrl)
+    }
+  }
+};
+
 var SchemaAlignment = {
   _isSetUp: false
 };
@@ -120,9 +142,6 @@ SchemaAlignment._rerenderTabs = function() {
   var schemaTab = $(DOM.loadHTML("wikidata", "scripts/schema-alignment-tab.html")).appendTo(this._schemaPanel);
   var schemaElmts = this._schemaElmts = DOM.bind(schemaTab);
   schemaElmts.targetWikibaseLabel.text($.i18n('wikibase-schema/target-wikibase-instance'));
-  schemaElmts.dialogExplanation.html($.i18n('wikibase-schema/dialog-explanation',
-      WikibaseManager.getSelectedWikibaseMainPage(),
-      WikibaseManager.getSelectedWikibaseName()));
   let editableEntityTypes = WikibaseManager.getSelectedWikibaseEditableEntityTypes();
   for (let entityType of editableEntityTypes) {
     let addButton = $('<div></div>').addClass("wbs-toolbar");
@@ -137,7 +156,7 @@ SchemaAlignment._rerenderTabs = function() {
   }
   
   schemaElmts.saveButton
-      .text($.i18n('wikibase-schema/save-button'))
+      .text($.i18n('wikibase-schema/save-new-schema'))
       .attr('title', $.i18n('wikibase-schema/save-schema-alt'))
       .prop('disabled', true)
       .addClass('disabled')
@@ -162,7 +181,7 @@ SchemaAlignment._rerenderTabs = function() {
 
   // Init template loading UI
   schemaElmts.templateLabel.text($.i18n('wikibase-schema/start-from-an-existing-schema'));
-  schemaElmts.saveNewTemplateButton.text($.i18n('wikibase-schema/save-new-schema'));
+  schemaElmts.saveNewTemplateButton.text($.i18n('wikibase-schema/save-button'));
 
   WikibaseTemplateManager.loadTemplates(function() {
     SchemaAlignment.updateAvailableTemplates();
@@ -249,7 +268,7 @@ SchemaAlignment.updateColumns = function() {
      // TODO we could potentially ignore any reconciliation to a siteIRI not
      // mentioned in the manifest…
      var cell = SchemaAlignment._createDraggableColumn(column.name,
-        reconConfig && column.reconStats ? reconConfig.identifierSpace : null);
+        reconConfig && column.reconStats ? reconConfig.identifierSpace : null, reconConfig);
      this._columnArea.append(cell);
   }
 
@@ -312,18 +331,6 @@ SchemaAlignment.switchTab = function(targetTab) {
 
   if (targetTab === "#view-panel") {
     ui.dataTableView.render();
-  }
-};
-
-SchemaAlignment.resize = function() {
-  if (this._viewPanel) {
-    var panelHeight = this._viewPanel.height();
-    this._schemaPanel.height(panelHeight);
-    this._issuesPanel.height(panelHeight);
-    this._previewPanel.height(panelHeight);
-    // Resize the inside of the schema panel
-    var headerHeight = this._schemaElmts.schemaHeader.outerHeight();
-    this._schemaElmts.canvas.height(panelHeight - headerHeight - 10);
   }
 };
 
@@ -448,8 +455,16 @@ SchemaAlignment._changesCleared = function() {
         .addClass('disabled');
 };
 
-SchemaAlignment._createDraggableColumn = function(name, reconciledSiteIRI) {
+SchemaAlignment._createDraggableColumn = function(name, reconciledSiteIRI, reconConfig) {
+  var logo = serviceLogoFromReconConfig(reconConfig);
   var cell = $("<div></div>").addClass('wbs-draggable-column').text(name);
+  if (logo) {
+    var img =$("<img>");
+    img.attr("src", logo);
+    img.attr("title", reconConfig.name);
+    img.addClass("serviceLogo-for-schema")
+    cell.append(img);
+  }
   cell.data({
         'columnName': name,
         'reconciledSiteIRI': reconciledSiteIRI
@@ -1482,13 +1497,24 @@ SchemaAlignment._initField = function(inputContainer, mode, initialValue, change
   }
 
   var acceptDraggableColumn = function(column) {
+    var logo = serviceLogoFromReconConfig(reconConfig);
+    var img = $("<img>");
+    if (logo) {
+      var imageUrl = logo;
+      img.attr("src", imageUrl);
+      img.attr("title", reconConfig.name);
+      img.addClass("serviceLogo-for-schema")
+    };
+
     input.hide();
     input.val("");
     var columnDiv = $('<div></div>').appendTo(inputContainer);
     column.appendTo(columnDiv);
+
     var origText = column.text();
     column.text("");
-    column.append($('<div></div>').addClass('wbs-restricted-column-name').text(origText));
+    column.append($('<div></div>').addClass('wbs-restricted-column-name').text(origText).append(img));
+   
     var deleteButton = SchemaAlignment._makeDeleteButton(true).appendTo(column);
     deleteButton.attr('alt', $.i18n('wikibase-schema/remove-column'));
     deleteButton.on('click',function (e) {
@@ -1553,13 +1579,20 @@ SchemaAlignment._initField = function(inputContainer, mode, initialValue, change
 
   // Init with the provided initial value.
   if (initialValue) {
+    var columns = theProject.columnModel.columns;
+    var reconConfig=null;
+    for (var i = 0; i < columns.length; i++) {
+       if(columns[i].name===initialValue.columnName){
+        reconConfig = columns[i].reconConfig;
+       }
+    }
      if (initialValue.type === "wbentityidvalueconstant" ||
         /* item for backwards-compatibility purposes */
         initialValue.type === "wbitemconstant" || initialValue.type === "wbpropconstant") {
         input.val(initialValue.label);
         input.addClass("wbs-validated-input");
      } else if (initialValue.type == "wbentityvariable") {
-        var cell = SchemaAlignment._createDraggableColumn(initialValue.columnName, true);
+        var cell = SchemaAlignment._createDraggableColumn(initialValue.columnName, true, reconConfig);
         acceptDraggableColumn(cell);
      } else if (initialValue.type === "wbstringconstant" ||
                 initialValue.type === "wbdateconstant" ||
@@ -1572,7 +1605,7 @@ SchemaAlignment._initField = function(inputContainer, mode, initialValue, change
                 initialValue.type === "wbdatevariable" ||
                 initialValue.type === "wblocationvariable" ||
                 initialValue.type === "wblanguagevariable") {
-        var cell = SchemaAlignment._createDraggableColumn(initialValue.columnName, false);
+        var cell = SchemaAlignment._createDraggableColumn(initialValue.columnName, false, reconConfig );
         acceptDraggableColumn(cell);
      }
      inputContainer.data("jsonValue", initialValue);
@@ -1662,6 +1695,7 @@ SchemaAlignment.updateNbEdits = function(nb_edits) {
 
 SchemaAlignment.preview = function() {
   var self = this;
+  var countsElem = this.issuesTabCount;
 
   $('.invalid-schema-warning').hide();
   self.schemaValidationErrorsInPreview.empty();
@@ -1689,11 +1723,21 @@ SchemaAlignment.preview = function() {
         self.updateNbEdits(data["edit_count"]);
       }
 
-      if (data.warnings) {
-          self._updateWarnings(data.warnings, data.nb_warnings);
-      } else {
-          self._updateWarnings([], 0);
-      }
+      // update the counts in the issues tab
+     var numWarnings = data.warnings ? data.nb_warnings : 0;
+     var numErrors = data.errors ? data.errors.length : 0;
+     var totalCount = numErrors + numWarnings;
+     countsElem.hide();
+     if (totalCount) {
+       countsElem.text(totalCount);
+       countsElem.show();
+     }
+
+     if (data.warnings) {
+         self._updateWarnings(data.warnings);
+     } else {
+         self._updateWarnings([]);
+     }
 
       if ("code" in data && data.code === "error" && data.reason == 'invalid-schema') {
          $('.invalid-schema-warning').show();
@@ -1730,25 +1774,17 @@ SchemaAlignment.onProjectUpdate = function(options) {
  * WARNINGS RENDERING *
  *************************/
 
-SchemaAlignment._updateWarnings = function(warnings, totalCount) {
+SchemaAlignment._updateWarnings = function(warnings) {
    var self = this;
-   var countsElem = this.issuesTabCount;
-
-   // clear everything
-   countsElem.hide();
+   
    self._issuesElmts.warningsArea.empty();
-
+   
    var table = $('<table></table>').appendTo(self._issuesElmts.warningsArea);
    for (var i = 0; i != warnings.length; i++) {
       var rendered = WarningsRenderer._renderWarning(warnings[i]);
       rendered.appendTo(table);
    }   
 
-   // update the counts
-   if (totalCount) {
-        countsElem.text(totalCount);
-        countsElem.show();
-   }
 };
 
 /************************************

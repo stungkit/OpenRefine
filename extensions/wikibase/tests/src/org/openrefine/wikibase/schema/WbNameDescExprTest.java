@@ -28,11 +28,6 @@ import static org.testng.Assert.assertEquals;
 
 import java.util.Collections;
 
-import org.openrefine.wikibase.schema.exceptions.QAWarningException;
-import org.openrefine.wikibase.schema.validation.ValidationState;
-import org.openrefine.wikibase.testing.JacksonSerializationTest;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
@@ -42,6 +37,12 @@ import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
 import com.google.refine.model.Column;
 import com.google.refine.model.ColumnModel;
 import com.google.refine.model.ModelException;
+
+import org.openrefine.wikibase.schema.exceptions.QAWarningException;
+import org.openrefine.wikibase.schema.validation.ValidationState;
+import org.openrefine.wikibase.testing.JacksonSerializationTest;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
 
 public class WbNameDescExprTest extends WbExpressionTest<MonolingualTextValue> {
 
@@ -60,7 +61,7 @@ public class WbNameDescExprTest extends WbExpressionTest<MonolingualTextValue> {
         ItemEditBuilder update = new ItemEditBuilder(subject);
         labelExpr.contributeTo(update, ctxt);
         assertEquals(Collections.singleton(Datamodel.makeMonolingualTextValue("le croissant magnifique", "fr")),
-                update.build().getLabels());
+                update.addContributingRowId(123).build().getLabels());
     }
 
     @Test
@@ -70,7 +71,7 @@ public class WbNameDescExprTest extends WbExpressionTest<MonolingualTextValue> {
         ItemEditBuilder update = new ItemEditBuilder(subject);
         descriptionExpr.contributeTo(update, ctxt);
         assertEquals(Collections.singleton(Datamodel.makeMonolingualTextValue("wunderschön", "de")),
-                update.build().getDescriptions());
+                update.addContributingRowId(123).build().getDescriptions());
     }
 
     @Test
@@ -80,15 +81,15 @@ public class WbNameDescExprTest extends WbExpressionTest<MonolingualTextValue> {
         ItemEditBuilder update = new ItemEditBuilder(subject);
         aliasExpr.contributeTo(update, ctxt);
         assertEquals(Collections.singleton(Datamodel.makeMonolingualTextValue("snack", "en")),
-                update.build().getAliases());
+                update.addContributingRowId(123).build().getAliases());
     }
 
     @Test
     public void testSkipped() throws QAWarningException {
-        ItemEditBuilder update = new ItemEditBuilder(subject);
+        ItemEditBuilder update = new ItemEditBuilder(subject).addContributingRowId(123);
         setRow("");
         expr.contributeTo(update, ctxt);
-        assertEquals(new ItemEditBuilder(subject).build(), update.build());
+        assertEquals(new ItemEditBuilder(subject).addContributingRowId(123).build(), update.build());
     }
 
     @Test

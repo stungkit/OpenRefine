@@ -47,7 +47,6 @@ describe(__filename, function () {
       .type('Address');
 
     cy.confirmDialogPanel();
-    cy.waitForOrOperation();
     cy.assertNotificationContainingText(
       'Transpose cells in columns starting with Street'
     );
@@ -55,15 +54,15 @@ describe(__filename, function () {
     cy.assertGridEquals([
       ['Name', 'Address'],
       ['Jacques Cousteau', 'Street: test 23 quai de Conti'],
-      ['', 'City: test Paris'],
-      ['', 'Country: test France'],
-      ['', 'Postal code: test 75270'],
+      [null, 'City: test Paris'],
+      [null, 'Country: test France'],
+      [null, 'Postal code: test 75270'],
 
       ['Emmy Noether', 'Street: test 010 N Merion Avenue'],
-      ['', 'City: test Bryn Mawr'],
-      ['', 'State/Province: test Pennsylvania'],
-      ['', 'Country: test USA'],
-      ['', 'Postal code: test 19010'],
+      [null, 'City: test Bryn Mawr'],
+      [null, 'State/Province: test Pennsylvania'],
+      [null, 'Country: test USA'],
+      [null, 'Postal code: test 19010'],
     ]);
   });
 
@@ -101,7 +100,6 @@ describe(__filename, function () {
     );
 
     cy.confirmDialogPanel();
-    cy.waitForOrOperation();
     cy.assertNotificationContainingText(
       'Transpose cells in columns starting with Street'
     );
@@ -109,14 +107,14 @@ describe(__filename, function () {
     cy.assertGridEquals([
       ['Name', 'Address part', 'Address'],
       ['Jacques Cousteau', 'Street', '23 quai de Conti'],
-      ['', 'City', 'Paris'],
-      ['', 'Country', 'France'],
-      ['', 'Postal code', '75270'],
+      [null, 'City', 'Paris'],
+      [null, 'Country', 'France'],
+      [null, 'Postal code', '75270'],
       ['Emmy Noether', 'Street', '010 N Merion Avenue'],
-      ['', 'City', 'Bryn Mawr'],
-      ['', 'State/Province', 'Pennsylvania'],
-      ['', 'Country', 'USA'],
-      ['', 'Postal code', '19010'],
+      [null, 'City', 'Bryn Mawr'],
+      [null, 'State/Province', 'Pennsylvania'],
+      [null, 'Country', 'USA'],
+      [null, 'Postal code', '19010'],
     ]);
   });
 });

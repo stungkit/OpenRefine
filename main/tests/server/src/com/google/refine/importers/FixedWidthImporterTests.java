@@ -27,8 +27,10 @@
 
 package com.google.refine.importers;
 
+import java.io.Serializable;
 import java.io.StringReader;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -36,7 +38,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.refine.model.Project;
 import com.google.refine.util.JSONUtilities;
 import com.google.refine.util.ParsingUtilities;
 
@@ -91,21 +93,106 @@ public class FixedWidthImporterTests extends ImporterTest {
         whenGetIntegerOption("limit", options, -1);
         whenGetBooleanOption("storeBlankCellsAsNulls", options, true);
 
-        try {
-            parseOneFile(SUT, reader);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, reader);
 
-        Assert.assertEquals(project.rows.size(), 3); // Column names count as a row?
-        Assert.assertEquals(project.rows.get(1).cells.size(), 3);
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(0), "NDB_No");
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(1), "Shrt_Desc");
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(2), "Water");
-        Assert.assertEquals(project.rows.get(2).cells.size(), 3);
-        Assert.assertEquals((String) project.rows.get(2).getCellValue(0), "TooSho");
-        Assert.assertEquals((String) project.rows.get(2).getCellValue(1), "rt");
-        Assert.assertNull(project.rows.get(2).getCellValue(2));
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3) },
+                new Serializable[][] {
+                        { "Col 1", "Col 2", "Col 3" }, // TODO those should be column names instead
+                        { "NDB_No", "Shrt_Desc", "Water" },
+                        { "TooSho", "rt", null },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
+    @Test
+    public void readNoColumnNames() throws Exception {
+        ArrayNode columnWidths = ParsingUtilities.mapper.createArrayNode();
+        JSONUtilities.append(columnWidths, 6);
+        JSONUtilities.append(columnWidths, 9);
+        JSONUtilities.append(columnWidths, 5);
+        whenGetArrayOption("columnWidths", options, columnWidths);
+
+        whenGetIntegerOption("ignoreLines", options, 0);
+        whenGetIntegerOption("headerLines", options, 0);
+        whenGetIntegerOption("skipDataLines", options, 0);
+        whenGetIntegerOption("limit", options, -1);
+        whenGetBooleanOption("storeBlankCellsAsNulls", options, true);
+
+        StringReader reader = new StringReader("NDB_NoShrt_DescWater\nTooShort\n");
+
+        parseOneFile(SUT, reader);
+
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3) },
+                new Serializable[][] {
+                        { "NDB_No", "Shrt_Desc", "Water" },
+                        { "TooSho", "rt", null },
+                });
+        assertProjectEquals(project, expectedProject);
+    }
+
+    @Test
+    public void readColumnHeader() throws Exception {
+        ArrayNode columnWidths = ParsingUtilities.mapper.createArrayNode();
+        JSONUtilities.append(columnWidths, 6);
+        JSONUtilities.append(columnWidths, 9);
+        JSONUtilities.append(columnWidths, 5);
+        whenGetArrayOption("columnWidths", options, columnWidths);
+
+        whenGetIntegerOption("ignoreLines", options, 0);
+        whenGetIntegerOption("headerLines", options, 1);
+        whenGetIntegerOption("skipDataLines", options, 0);
+        whenGetIntegerOption("limit", options, -1);
+        whenGetBooleanOption("storeBlankCellsAsNulls", options, true);
+
+        StringReader reader = new StringReader("NDB_NoShrt_DescWater\n012345green....00342\n");
+
+        parseOneFile(SUT, reader);
+
+        Project expectedProject = createProject(
+                new String[] { "NDB_No", "Shrt_Desc", "Water" },
+                new Serializable[][] {
+                        { "012345", "green....", "00342" },
+                });
+        assertProjectEquals(project, expectedProject);
+    }
+
+    @Test
+    public void testDeleteEmptyColumns() throws Exception {
+        StringReader reader = new StringReader(SAMPLE_ROW + "\nTooShort");
+
+        ArrayNode columnWidths = ParsingUtilities.mapper.createArrayNode();
+        // Set up blank column in project
+        JSONUtilities.append(columnWidths, 6);
+        JSONUtilities.append(columnWidths, 0);
+        JSONUtilities.append(columnWidths, 5);
+        JSONUtilities.append(columnWidths, 0);
+        JSONUtilities.append(columnWidths, 3);
+        whenGetArrayOption("columnWidths", options, columnWidths);
+
+        ArrayNode columnNames = ParsingUtilities.mapper.createArrayNode();
+        columnNames.add("Col 1");
+        columnNames.add("Col 2");
+        columnNames.add("Col 3");
+        columnNames.add("Col 4");
+        columnNames.add("Col 5");
+        columnNames.add("Col 6");
+        whenGetArrayOption("columnNames", options, columnNames);
+
+        whenGetIntegerOption("ignoreLines", options, 0);
+        whenGetIntegerOption("headerLines", options, 1);
+        whenGetIntegerOption("skipDataLines", options, 0);
+        whenGetIntegerOption("limit", options, -1);
+
+        // This will mock the situation of deleting empty columns(col2&col4)
+        whenGetBooleanOption("storeBlankCellsAsNulls", options, false);
+        whenGetBooleanOption("storeBlankColumns", options, false);
+
+        parseOneFile(SUT, reader);
+
+        Assert.assertEquals(project.columnModel.columns.get(0).getName(), "Col 1");
+        Assert.assertEquals(project.columnModel.columns.get(1).getName(), "Col 3");
+        Assert.assertEquals(project.columnModel.columns.get(2).getName(), "Col 5");
+    }
 }

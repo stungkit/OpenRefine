@@ -27,9 +27,27 @@ package org.openrefine.wikibase.editing;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.wikidata.wdtk.datamodel.interfaces.EntityDocument;
+import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.EntityUpdate;
+import org.wikidata.wdtk.datamodel.interfaces.LabeledDocument;
+import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
+import org.wikidata.wdtk.wikibaseapi.ApiConnection;
+import org.wikidata.wdtk.wikibaseapi.EditingResult;
+import org.wikidata.wdtk.wikibaseapi.WikibaseDataEditor;
+import org.wikidata.wdtk.wikibaseapi.WikibaseDataFetcher;
+import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiApiErrorException;
+import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiErrorMessage;
 
 import org.openrefine.wikibase.schema.entityvalues.ReconEntityIdValue;
 import org.openrefine.wikibase.schema.exceptions.NewEntityNotCreatedYetException;
@@ -38,15 +56,6 @@ import org.openrefine.wikibase.updates.FullMediaInfoUpdate;
 import org.openrefine.wikibase.updates.MediaInfoEdit;
 import org.openrefine.wikibase.updates.scheduler.ImpossibleSchedulingException;
 import org.openrefine.wikibase.updates.scheduler.WikibaseAPIUpdateScheduler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.wikidata.wdtk.datamodel.interfaces.EntityDocument;
-import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.EntityUpdate;
-import org.wikidata.wdtk.wikibaseapi.ApiConnection;
-import org.wikidata.wdtk.wikibaseapi.WikibaseDataEditor;
-import org.wikidata.wdtk.wikibaseapi.WikibaseDataFetcher;
-import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiApiErrorException;
 
 /**
  * Schedules and performs a list of updates to entities via the API.
@@ -64,14 +73,17 @@ public class EditBatchProcessor {
     private NewEntityLibrary library;
     private List<EntityEdit> scheduled;
     private String summary;
-    private List<String> tags;
+    private LinkedList<String> tagCandidates;
 
+    private String currentTag;
     private List<EntityEdit> remainingUpdates;
     private List<EntityEdit> currentBatch;
     private int batchCursor;
     private int globalCursor;
     private Map<String, EntityDocument> currentDocs;
     private int batchSize;
+    private int filePageWaitTime;
+    private int filePageMaxWaitTime;
 
     /**
      * Initiates the process of pushing a batch of updates to Wikibase. This schedules the updates and is a prerequisite
@@ -89,8 +101,8 @@ public class EditBatchProcessor {
      *            the library to use to keep track of new entity creation
      * @param summary
      *            the summary to append to all edits
-     * @param tags
-     *            the list of tags to apply to all edits
+     * @param tagCandidates
+     *            the list of tags to try to apply to edits. The first existing tag will be added to all edits (if any).
      * @param batchSize
      *            the number of entities that should be retrieved in one go from the API
      * @param maxEditsPerMinute
@@ -98,7 +110,7 @@ public class EditBatchProcessor {
      */
     public EditBatchProcessor(WikibaseDataFetcher fetcher, WikibaseDataEditor editor, ApiConnection connection,
             List<EntityEdit> entityDocuments,
-            NewEntityLibrary library, String summary, int maxLag, List<String> tags, int batchSize, int maxEditsPerMinute) {
+            NewEntityLibrary library, String summary, int maxLag, List<String> tagCandidates, int batchSize, int maxEditsPerMinute) {
         this.fetcher = fetcher;
         this.editor = editor;
         this.connection = connection;
@@ -113,8 +125,10 @@ public class EditBatchProcessor {
 
         this.library = library;
         this.summary = summary;
-        this.tags = tags;
+        this.tagCandidates = new LinkedList<>(tagCandidates);
         this.batchSize = batchSize;
+        this.filePageWaitTime = 1000;
+        this.filePageMaxWaitTime = 60000;
 
         // Schedule the edit batch
         WikibaseAPIUpdateScheduler scheduler = new WikibaseAPIUpdateScheduler();
@@ -136,10 +150,10 @@ public class EditBatchProcessor {
      * 
      * @throws InterruptedException
      */
-    public void performEdit()
+    public EditResult performEdit()
             throws InterruptedException {
         if (remainingEdits() == 0) {
-            return;
+            throw new IllegalStateException("No edit to perform");
         }
         if (batchCursor == currentBatch.size()) {
             prepareNewBatch();
@@ -151,59 +165,159 @@ public class EditBatchProcessor {
         try {
             update = rewriter.rewrite(update);
         } catch (NewEntityNotCreatedYetException e) {
-            logger.warn("Failed to rewrite update on entity " + update.getEntityId() + ". Missing entity: " + e.getMissingEntity()
-                    + ". Skipping update.");
             batchCursor++;
-            return;
+            return new EditResult(update.getContributingRowIds(),
+                    "rewrite-failed",
+                    "Failed to rewrite update on entity " + update.getEntityId() + ". Missing entity: " + e.getMissingEntity(),
+                    0L, OptionalLong.empty(), null);
         }
 
+        // Pick a tag to apply to the edits
+        if (currentTag == null && !tagCandidates.isEmpty()) {
+            currentTag = tagCandidates.remove();
+        }
+        List<String> tags = currentTag == null ? Collections.emptyList() : Collections.singletonList(currentTag);
+
+        long oldRevisionId = 0L;
+        OptionalLong lastRevisionId = OptionalLong.empty();
+        String newEntityUrl = null;
         try {
             if (update.isNew()) {
                 // New entities
                 ReconEntityIdValue newCell = (ReconEntityIdValue) update.getEntityId();
                 EntityIdValue createdDocId;
+                String name = "";
                 if (update instanceof MediaInfoEdit) {
                     MediaFileUtils mediaFileUtils = new MediaFileUtils(connection);
-                    createdDocId = ((MediaInfoEdit) update).uploadNewFile(editor, mediaFileUtils, summary, tags);
+                    createdDocId = ((MediaInfoEdit) update).uploadNewFile(editor, mediaFileUtils, summary, tags, filePageWaitTime,
+                            filePageMaxWaitTime);
+                    name = "File:".concat(((MediaInfoEdit) update).getFileName());
                 } else {
-                    createdDocId = editor.createEntityDocument(update.toNewEntity(), summary, tags).getEntityId();
+                    LabeledDocument labeledDocument = (LabeledDocument) editor.createEntityDocument(update.toNewEntity(), summary, tags);
+                    createdDocId = labeledDocument.getEntityId();
+                    name = getDocumentLabel(labeledDocument.getLabels(), createdDocId.getId());
                 }
                 library.setId(newCell.getReconInternalId(), createdDocId.getId());
+                library.setName(newCell.getReconInternalId(), name);
+                newEntityUrl = createdDocId.getSiteIri() + createdDocId.getId();
             } else {
                 // Existing entities
-                EntityUpdate entityUpdate;
+                EntityUpdate entityUpdate = null;
                 if (update.requiresFetchingExistingState()) {
-                    entityUpdate = update.toEntityUpdate(currentDocs.get(update.getEntityId().getId()));
-                } else {
+                    String entityId = update.getEntityId().getId();
+                    if (currentDocs.get(entityId) != null) {
+                        entityUpdate = update.toEntityUpdate(currentDocs.get(entityId));
+                    } else {
+                        logger.warn(String.format("Skipping editing of %s as it could not be retrieved", entityId));
+                        entityUpdate = null;
+                    }
+                } else if (!update.isEmpty()) {
                     entityUpdate = update.toEntityUpdate(null);
                 }
 
-                if (!entityUpdate.isEmpty()) { // skip updates which do not change anything
-                    editor.editEntityDocument(entityUpdate, false, summary, tags);
+                if (entityUpdate != null) {
+                    oldRevisionId = entityUpdate.getBaseRevisionId();
+                }
+
+                if (entityUpdate != null && !entityUpdate.isEmpty()) { // skip updates which do not change anything
+                    EditingResult result = editor.editEntityDocument(entityUpdate, false, summary, tags);
+                    lastRevisionId = result.getLastRevisionId();
                 }
                 // custom code for handling our custom updates to mediainfo, which cover editing more than Wikibase
                 if (entityUpdate instanceof FullMediaInfoUpdate) {
                     FullMediaInfoUpdate fullMediaInfoUpdate = (FullMediaInfoUpdate) entityUpdate;
+                    MediaFileUtils mediaFileUtils = new MediaFileUtils(connection);
+
+                    if (fullMediaInfoUpdate.getFilePath() != null) {
+                        ((MediaInfoEdit) update).uploadFile(mediaFileUtils, summary, tags, filePageWaitTime,
+                                filePageMaxWaitTime);
+                    }
+
                     if (fullMediaInfoUpdate.isOverridingWikitext() && fullMediaInfoUpdate.getWikitext() != null) {
-                        MediaFileUtils mediaFileUtils = new MediaFileUtils(connection);
                         long pageId = Long.parseLong(fullMediaInfoUpdate.getEntityId().getId().substring(1));
-                        mediaFileUtils.editPage(pageId, fullMediaInfoUpdate.getWikitext(), summary, tags);
+                        long revisionId = mediaFileUtils.editPage(pageId, fullMediaInfoUpdate.getWikitext(), summary, tags);
+                        lastRevisionId = OptionalLong.of(revisionId);
                     } else {
                         // manually purge the wikitext page associated with this mediainfo
-                        MediaFileUtils mediaFileUtils = new MediaFileUtils(connection);
                         mediaFileUtils.purgePage(Long.parseLong(entityUpdate.getEntityId().getId().substring(1)));
                     }
                 }
             }
         } catch (MediaWikiApiErrorException e) {
-            // TODO find a way to report these errors to the user in a nice way
-            logger.warn("MediaWiki error while editing [" + e.getErrorCode()
-                    + "]: " + e.getErrorMessage());
+            if ("badtags".equals(e.getErrorCode()) && currentTag != null) {
+                // if we tried editing with a tag that does not exist, clear the tag and try again
+                currentTag = null;
+                return performEdit();
+            } else {
+                batchCursor++;
+                if ("failed-save".equals(e.getErrorCode())) {
+                    // special case for the failed-save error which isn't very informative.
+                    // We look for a better error message.
+                    for (MediaWikiErrorMessage detailedMessage : e.getDetailedMessages()) {
+                        if (!"wikibase-api-failed-save".equals(detailedMessage.getName())) {
+                            return new EditResult(update.getContributingRowIds(), detailedMessage.getName(),
+                                    detailedMessage.getHTMLText(), oldRevisionId, OptionalLong.empty(), null);
+                        }
+                    }
+                }
+                return new EditResult(update.getContributingRowIds(), e.getErrorCode(), e.getErrorMessage(), oldRevisionId,
+                        OptionalLong.empty(), null);
+            }
         } catch (IOException e) {
-            logger.warn("IO error while editing: " + e.getMessage());
+            batchCursor++;
+            return new EditResult(update.getContributingRowIds(), "network-error", e.getMessage(), oldRevisionId, lastRevisionId,
+                    newEntityUrl);
         }
 
         batchCursor++;
+        return new EditResult(update.getContributingRowIds(), null, null, oldRevisionId, lastRevisionId, newEntityUrl);
+    }
+
+    public static class EditResult {
+
+        private final Set<Integer> correspondingRowIds;
+        private final String errorCode;
+        private final String errorMessage;
+        private final long baseRevisionId;
+        private final OptionalLong lastRevisionId;
+        private final String newEntityUrl;
+
+        public EditResult(Set<Integer> correspondingRowIds,
+                String errorCode, String errorMessage,
+                long baseRevisionId,
+                OptionalLong lastRevisionId,
+                String newEntityUrl) {
+            this.correspondingRowIds = correspondingRowIds;
+            this.errorCode = errorCode;
+            this.errorMessage = errorMessage;
+            this.baseRevisionId = baseRevisionId;
+            this.lastRevisionId = lastRevisionId;
+            this.newEntityUrl = newEntityUrl;
+        }
+
+        public Set<Integer> getCorrespondingRowIds() {
+            return correspondingRowIds;
+        }
+
+        public String getErrorCode() {
+            return errorCode;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+
+        public long getBaseRevisionId() {
+            return baseRevisionId;
+        }
+
+        public OptionalLong getLastRevisionId() {
+            return lastRevisionId;
+        }
+
+        public String getNewEntityUrl() {
+            return newEntityUrl;
+        }
     }
 
     /**
@@ -266,4 +380,22 @@ public class EditBatchProcessor {
         batchCursor = 0;
     }
 
+    private String getDocumentLabel(Map<String, MonolingualTextValue> labels, String defaultName) {
+        if (labels == null || labels.isEmpty()) {
+            return defaultName;
+        }
+        String docLabel = null;
+        String defaultLanguage = Locale.getDefault().getLanguage();
+        for (Map.Entry<String, MonolingualTextValue> entry : labels.entrySet()) {
+            String language = entry.getKey();
+            MonolingualTextValue labelValue = entry.getValue();
+            if (defaultLanguage.equals(language)) {
+                return labelValue.getText();
+            }
+            if (docLabel == null) {
+                docLabel = labelValue.getText();
+            }
+        }
+        return docLabel == null ? defaultName : docLabel;
+    }
 }

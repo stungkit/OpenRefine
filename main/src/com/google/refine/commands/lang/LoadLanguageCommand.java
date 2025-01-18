@@ -46,13 +46,13 @@ import javax.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import edu.mit.simile.butterfly.ButterflyModule;
+
 import com.google.refine.ProjectManager;
 import com.google.refine.RefineServlet;
 import com.google.refine.commands.Command;
 import com.google.refine.preference.PreferenceStore;
 import com.google.refine.util.ParsingUtilities;
-
-import edu.mit.simile.butterfly.ButterflyModule;
 
 public class LoadLanguageCommand extends Command {
 
@@ -149,7 +149,12 @@ public class LoadLanguageCommand extends Command {
         ButterflyModule module = servlet.getModule(strModule);
         String strLangFile = "translation-" + strLang + ".json";
         String strMessage = "[" + strModule + ":" + strLangFile + "]";
-        File langFile = new File(module.getPath(), "langs" + File.separator + strLangFile);
+        File langsDir = new File(module.getPath(), "langs");
+        File langFile = new File(langsDir, strLangFile);
+        if (!langFile.toPath().normalize().toAbsolutePath().startsWith(langsDir.toPath().normalize().toAbsolutePath())) {
+            logger.error("Security: Attempt to escape the langs directory to read another file");
+            return null;
+        }
         FileInputStream fisLang = null;
 
         try {

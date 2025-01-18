@@ -1,10 +1,11 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.ConstraintFetcher;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.implementation.StatementImpl;
@@ -16,10 +17,10 @@ import org.wikidata.wdtk.datamodel.interfaces.Statement;
 import org.wikidata.wdtk.datamodel.interfaces.Value;
 import org.wikidata.wdtk.datamodel.interfaces.ValueSnak;
 
-import java.util.List;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.openrefine.wikibase.qa.ConstraintFetcher;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
 
@@ -47,6 +48,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         Statement statement = new StatementImpl("P157", mainSnak, idA);
         TermedStatementEntityEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak1 = Datamodel.makeValueSnak(propertyParameterPID, propertyParameterValue);
@@ -59,7 +61,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         setFetcher(fetcher);
 
         scrutinize(updateA);
-        assertWarningsRaised(ItemRequiresScrutinizer.existingItemRequirePropertyType);
+        assertWarningsRaised(ItemRequiresScrutinizer.existingItemRequireValueswithSuggestedValueType);
     }
 
     @Test
@@ -72,6 +74,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         TermedStatementEntityEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
                 .addStatement(add(requiredStatement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak1 = Datamodel.makeValueSnak(propertyParameterPID, propertyParameterValue);
@@ -84,7 +87,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         setFetcher(fetcher);
 
         scrutinize(updateA);
-        assertWarningsRaised(ItemRequiresScrutinizer.existingItemRequireValuesType);
+        assertWarningsRaised(ItemRequiresScrutinizer.existingItemRequireValueswithSuggestedValueType);
     }
 
     @Test
@@ -97,6 +100,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         TermedStatementEntityEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
                 .addStatement(add(requiredStatement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak1 = Datamodel.makeValueSnak(propertyParameterPID, propertyParameterValue);
@@ -119,6 +123,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         Statement statement = new StatementImpl("P157", mainSnak, idA);
         TermedStatementEntityEdit updateA = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak1 = Datamodel.makeValueSnak(propertyParameterPID, propertyParameterValue);
@@ -131,7 +136,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         setFetcher(fetcher);
 
         scrutinize(updateA);
-        assertWarningsRaised(ItemRequiresScrutinizer.newItemRequirePropertyType);
+        assertWarningsRaised(ItemRequiresScrutinizer.newItemRequireValueswithSuggestedValueType);
     }
 
     @Test
@@ -144,6 +149,7 @@ public class ItemRequiresScrutinizerTest extends ScrutinizerTest {
         TermedStatementEntityEdit update = new ItemEditBuilder(id)
                 .addStatement(add(statement1))
                 .addStatement(add(statement2))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak1 = Datamodel.makeValueSnak(propertyParameterPID, propertyParameterValue);

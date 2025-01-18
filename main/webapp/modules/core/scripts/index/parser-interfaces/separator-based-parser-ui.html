@@ -1,10 +1,10 @@
 <div class="grid-layout layout-loose  layout-full">
-  <table>
+  <table role="presentation">
 
     <tr>
       <td>
         <div class="grid-layout layout-tighter">
-          <table>
+          <table role="presentation">
             <tr>
               <td width="50%" id="or-import-encoding"></td>
               <td><input bind="encodingInput"></input></td>
@@ -15,7 +15,7 @@
 
       <td colspan="2">
         <div class="grid-layout layout-tighter layout-full">
-          <table>
+          <table role="presentation">
             <tr>
               <td style="text-align:end" width="1%"><button class="button" bind="previewButton"></button></td>
             </tr>
@@ -33,7 +33,7 @@
     <tr>
       <td>
         <div class="grid-layout layout-tightest">
-          <table>
+          <table role="presentation">
             <tr>
               <td colspan="2" id="or-import-colsep"></td>
             </tr>
@@ -80,7 +80,7 @@
       </td>
       <td>
         <div class="grid-layout layout-tightest">
-          <table>
+          <table role="presentation">
             <tr>
               <td width="1%">
                 <input type="checkbox" bind="ignoreCheckbox" id="$ignore" />
@@ -89,13 +89,13 @@
                 <label for="$ignore" id="or-import-ignore"></label>
               </td>
               <td>
-                <input bind="ignoreInput" spellcheck="false" type="text" class="lightweight" size="2" value="0" />
+                <input bind="ignoreInput" type="number" class="lightweight" size="7" value="0" />
                 <label for="$ignore" id="or-import-lines"></label>
               </td>
             </tr>
           </table>
 
-          <table style="margin-top:1em">
+          <table role="presentation" style="margin-top:1em">
             <tr>
               <td width="1%">
                 <input type="radio" bind="headerLinesCheckbox" id="$headers" />
@@ -104,7 +104,7 @@
                 <label for="$headers" id="or-import-parse"></label>
               </td>
               <td>
-                <input bind="headerLinesInput" spellcheck="false" type="text" class="lightweight" size="2" value="1" />
+                <input bind="headerLinesInput" type="number" class="lightweight" size="7" value="1" />
                 <label for="$headers" id="or-import-header"></label>
               </td>
             </tr>
@@ -119,14 +119,14 @@
             </tr>
           </table>
 
-          <table style="margin-top:1em;">
+          <table role="presentation" style="margin-top:1em;">
             <tr>
               <td width="1%">
                 <input type="checkbox" bind="skipCheckbox" id="$skip" />
               </td>
               <td width="100px"><label for="$skip" id="or-import-discard"></label></td>
               <td>
-                <input bind="skipInput" spellcheck="false" type="text" class="lightweight" size="2" value="0" />
+                <input bind="skipInput" type="number" class="lightweight" size="7" value="0" />
                 <label for="$skip" id="or-import-rows"></label>
               </td>
             </tr>
@@ -136,7 +136,7 @@
               </td>
               <td><label for="$limit" id="or-import-load"></label></td>
               <td>
-                <input bind="limitInput" spellcheck="false" type="text" class="lightweight" size="2" value="0" />
+                <input bind="limitInput" type="number" class="lightweight" size="7" value="0" />
                 <label for="$limit" id="or-import-rows2"></label>
               </td>
             </tr>
@@ -145,7 +145,7 @@
       </td>
       <td>
         <div class="grid-layout layout-tightest">
-          <table>
+          <table role="presentation">
             <tr>
               <td width="1%"><input type="checkbox" bind="guessCellValueTypesCheckbox" id="$guess" /></td>
               <td colspan="2"><label for="$guess" id="or-import-parseCell"></label>
@@ -154,6 +154,12 @@
             <tr>
               <td width="1%"><input type="checkbox" bind="storeBlankRowsCheckbox" id="$store-blank-rows" /></td>
               <td colspan="2"><label for="$store-blank-rows" id="or-import-blank"></label>
+              </td>
+            </tr>
+
+            <tr>
+              <td width="1%"><input type="checkbox" bind="storeBlankColumnsCheckbox" id="$store-blank-columns" /></td>
+              <td colspan="2"><label for="$store-blank-columns" id="or-import-blank-columns"></label>
               </td>
             </tr>
 

@@ -28,7 +28,9 @@ describe(__filename, function () {
     cy.waitForDialogPanel();
 
     cy.get('input[bind="columnNameInput"]').type('Test_Python_toLower');
-    cy.get('select[bind="expressionPreviewLanguageSelect"]').select('jython');
+
+    cy.get('textarea.expression-preview-code').clear()
+    cy.selectPython();
     cy.typeExpression('return value.lower()');
     cy.get(
       '.expression-preview-table-wrapper tr:nth-child(2) td:last-child'
@@ -48,7 +50,7 @@ describe(__filename, function () {
     cy.waitForDialogPanel();
 
     cy.get('input[bind="columnNameInput"]').type('Test_Clojure_toLower');
-    cy.get('select[bind="expressionPreviewLanguageSelect"]').select('clojure');
+    cy.selectClojure();
     cy.typeExpression('(.. value (toLowerCase) )');
     cy.get(
       '.expression-preview-table-wrapper tr:nth-child(2) td:last-child'

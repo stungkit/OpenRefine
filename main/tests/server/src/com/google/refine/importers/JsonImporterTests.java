@@ -33,12 +33,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.google.refine.importers;
 
-import java.io.*;
-import java.util.ArrayList;
+import static org.testng.Assert.assertEquals;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Serializable;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -48,17 +58,15 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.refine.importers.JsonImporter.JSONTreeReader;
+import com.google.refine.importers.tree.ImportColumnGroup;
 import com.google.refine.importers.tree.TreeImportingParserBase;
 import com.google.refine.importers.tree.TreeReader.Token;
 import com.google.refine.importing.ImportingJob;
+import com.google.refine.model.Project;
 import com.google.refine.model.Row;
 import com.google.refine.util.JSONUtilities;
 import com.google.refine.util.ParsingUtilities;
-
-import com.google.refine.importers.tree.ImportColumnGroup;
 
 public class JsonImporterTests extends ImporterTest {
 
@@ -97,21 +105,45 @@ public class JsonImporterTests extends ImporterTest {
     }
 
     @Test
-    public void canParseSample() {
+    public void canParseSample() throws Exception {
         RunTest(getSample());
         assertProjectCreated(project, 4, 6);
 
         Row row = project.rows.get(0);
         Assert.assertNotNull(row);
         Assert.assertNotNull(row.getCell(1));
-        Assert.assertEquals(row.getCell(1).value, "Author 1, The");
+        assertEquals(row.getCell(1).value, "Author 1, The");
     }
 
     @Test
-    public void canThrowError() {
+    public void canParseSampleWithComments() throws Exception {
+        RunTest(getSampleWithComments());
+        assertProjectCreated(project, 4, 6);
+
+        Row row = project.rows.get(0);
+        Assert.assertNotNull(row);
+        Assert.assertNotNull(row.getCell(1));
+        assertEquals(row.getCell(1).value, "Author 1, The");
+    }
+
+    @Test
+    public void canThrowError() throws IOException {
         String errJSON = getSampleWithError();
+        ObjectNode fileRecord = ParsingUtilities.mapper.createObjectNode();
+        JSONUtilities.safePut(fileRecord, "origin", "clipboard");
+        JSONUtilities.safePut(fileRecord, "declaredEncoding", StandardCharsets.UTF_8.toString());
+        JSONUtilities.safePut(fileRecord, "declaredMimeType", "text/json");
+        JSONUtilities.safePut(fileRecord, "format", "text/json");
+        JSONUtilities.safePut(fileRecord, "fileName", "(clipboard)");
+        File jsonFile = new File(job.getRawDataDir(), "test.json");
+        Files.write(jsonFile.toPath(), errJSON.getBytes(StandardCharsets.UTF_8));
+        JSONUtilities.safePut(fileRecord, "location", "test.json");
         ObjectNode options = SUT.createParserUIInitializationData(
-                job, new LinkedList<>(), "text/json");
+                job, List.of(fileRecord), "text/json");
+        assertEquals(options.get("error").asText(),
+                "com.fasterxml.jackson.core.JsonParseException: Unexpected character (';' (code 59)): was expecting comma to separate Object entries\n"
+                        +
+                        " at [Source: (File); line: 1, column: 11]");
         ArrayNode path = ParsingUtilities.mapper.createArrayNode();
         JSONUtilities.append(path, JsonImporter.ANONYMOUS);
         JSONUtilities.safePut(options, "recordPath", path);
@@ -119,13 +151,9 @@ public class JsonImporterTests extends ImporterTest {
         JSONUtilities.safePut(options, "storeEmptyStrings", true);
         JSONUtilities.safePut(options, "guessCellValueTypes", false);
 
-        try {
-            inputStream = new ByteArrayInputStream(errJSON.getBytes("UTF-8"));
-        } catch (UnsupportedEncodingException e1) {
-            Assert.fail();
-        }
+        inputStream = new ByteArrayInputStream(errJSON.getBytes(StandardCharsets.UTF_8));
         ImportColumnGroup rootColumnGroup = new ImportColumnGroup();
-        List<Exception> exceptions = new ArrayList<Exception>();
+        List<Exception> exceptions = new ArrayList<>();
 
         SUT.parseOneFile(
                 project,
@@ -138,12 +166,12 @@ public class JsonImporterTests extends ImporterTest {
                 options,
                 exceptions);
         Assert.assertFalse(exceptions.isEmpty());
-        Assert.assertEquals("Unexpected character (';' (code 59)): was expecting comma to separate Object entries",
+        assertEquals("Unexpected character (';' (code 59)): was expecting comma to separate Object entries",
                 exceptions.get(0).getMessage());
     }
 
     @Test
-    public void trimLeadingTrailingWhitespaceOnTrimStrings() {
+    public void trimLeadingTrailingWhitespaceOnTrimStrings() throws Exception {
         String ScraperwikiOutput = "[\n" +
                 "{\n" +
                 "        \"school\": \"  University of Cambridge  \",\n" +
@@ -153,16 +181,17 @@ public class JsonImporterTests extends ImporterTest {
                 "    }\n" +
                 "]\n";
         RunTest(ScraperwikiOutput, true);
-        assertProjectCreated(project, 4, 1);
-        Row row = project.rows.get(0);
-        Assert.assertNotNull(row);
-        Assert.assertNotNull(row.getCell(1));
-        Assert.assertEquals(row.getCell(0).value, "University of Cambridge");
-        Assert.assertEquals(row.getCell(1).value, "Amy Zhang");
+
+        Project expectedProject = createProject(
+                new String[] { "_ - school", "_ - name", "_ - student-faculty-score", "_ - intl-student-score" },
+                new Serializable[][] {
+                        { "University of Cambridge", "Amy Zhang", "100", "95" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void doesNotTrimLeadingTrailingWhitespaceOnNoTrimStrings() {
+    public void doesNotTrimLeadingTrailingWhitespaceOnNoTrimStrings() throws Exception {
         String ScraperwikiOutput = "[\n" +
                 "{\n" +
                 "        \"school\": \"  University of Cambridge  \",\n" +
@@ -172,70 +201,93 @@ public class JsonImporterTests extends ImporterTest {
                 "    }\n" +
                 "]\n";
         RunTest(ScraperwikiOutput);
-        assertProjectCreated(project, 4, 1);
-        Row row = project.rows.get(0);
-        Assert.assertNotNull(row);
-        Assert.assertNotNull(row.getCell(1));
-        Assert.assertEquals(row.getCell(0).value, "  University of Cambridge  ");
-        Assert.assertEquals(row.getCell(1).value, "          Amy Zhang                   ");
+
+        Project expectedProject = createProject(
+                new String[] { "_ - school", "_ - name", "_ - student-faculty-score", "_ - intl-student-score" },
+                new Serializable[][] {
+                        { "  University of Cambridge  ", "          Amy Zhang                   ", "100", "95" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void canParseSampleWithDuplicateNestedElements() {
+    public void canParseSampleWithDuplicateNestedElements() throws Exception {
         RunTest(getSampleWithDuplicateNestedElements());
-        assertProjectCreated(project, 4, 12);
 
-        Row row = project.rows.get(0);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 4);
-        Assert.assertNotNull(row.getCell(1));
-        Assert.assertEquals(row.getCell(1).value, "Author 1, The");
-        Assert.assertEquals(project.rows.get(1).getCell(1).value, "Author 1, Another");
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - title", "_ - publish_date", "_ - authors - _ - name" },
+                new Serializable[][] {
+                        { 1L, "Book title 1", "2010-05-26", "Author 1, The" },
+                        { null, null, null, "Author 1, Another" },
+                        { 2L, "Book title 2", "2010-05-26", "Author 2, The" },
+                        { null, null, null, "Author 2, Another" },
+                        { 3L, "Book title 3", "2010-05-26", "Author 3, The" },
+                        { null, null, null, "Author 3, Another" },
+                        { 4L, "Book title 4", "2010-05-26", "Author 4, The" },
+                        { null, null, null, "Author 4, Another" },
+                        { 5L, "Book title 5", "2010-05-26", "Author 5, The" },
+                        { null, null, null, "Author 5, Another" },
+                        { 6L, "Book title 6", "2010-05-26", "Author 6, The" },
+                        { null, null, null, "Author 6, Another" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void testCanParseLineBreak() {
+    public void testCanParseLineBreak() throws Exception {
         RunTest(getSampleWithLineBreak());
         assertProjectCreated(project, 4, 6);
 
-        Row row = project.rows.get(3);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 4);
-        Assert.assertNotNull(row.getCell(1));
-        Assert.assertEquals(row.getCell(1).value, "With line\n break");
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - author", "_ - title", "_ - publish_date" },
+                new Serializable[][] {
+                        { 1L, "Author 1, The", "Book title 1", "2010-05-26" },
+                        { 2L, "Author 2, The", "Book title 2", "2010-05-26" },
+                        { 3L, "Author 3, The", "Book title 3", "2010-05-26" },
+                        { 4L, "With line\n break", "Book title 4", "2010-05-26" },
+                        { 5L, "Author 5, The", "Book title 5", "2010-05-26" },
+                        { 6L, "Author 6, The", "Book title 6", "2010-05-26" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void testElementsWithVaryingStructure() {
+    public void testElementsWithVaryingStructure() throws Exception {
         RunTest(getSampleWithVaryingStructure());
         assertProjectCreated(project, 5, 6);
 
-        Assert.assertEquals(project.columnModel.getColumnByCellIndex(4).getName(), JsonImporter.ANONYMOUS + " - genre");
-
-        Row row0 = project.rows.get(0);
-        Assert.assertNotNull(row0);
-        Assert.assertEquals(row0.cells.size(), 4);
-
-        Row row5 = project.rows.get(5);
-        Assert.assertNotNull(row5);
-        Assert.assertEquals(row5.cells.size(), 5);
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - author", "_ - title", "_ - publish_date", "_ - genre" },
+                new Serializable[][] {
+                        { 1L, "Author 1, The", "Book title 1", "2010-05-26", null },
+                        { 2L, "Author 2, The", "Book title 2", "2010-05-26", null },
+                        { 3L, "Author 3, The", "Book title 3", "2010-05-26", null },
+                        { 4L, "Author 4, The", "Book title 4", "2010-05-26", null },
+                        { 5L, "Author 5, The", "Book title 5", "2010-05-26", null },
+                        { 6L, "Author 6, The", "Book title 6", "2010-05-26", "New element not seen in other records" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void testElementWithNestedTree() {
+    public void testElementWithNestedTree() throws Exception {
         RunTest(getSampleWithTreeStructure());
-        assertProjectCreated(project, 5, 6);
 
-        Assert.assertEquals(project.columnModel.columnGroups.size(), 1);
-        Assert.assertEquals(project.columnModel.columnGroups.get(0).keyColumnIndex, 3);
-        Assert.assertEquals(project.columnModel.columnGroups.get(0).startColumnIndex, 3);
-        Assert.assertNull(project.columnModel.columnGroups.get(0).parentGroup);
-        Assert.assertEquals(project.columnModel.columnGroups.get(0).subgroups.size(), 0);
-        Assert.assertEquals(project.columnModel.columnGroups.get(0).columnSpan, 2);
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - title", "_ - publish_date", "_ - author - author-name", "_ - author - author-dob" },
+                new Serializable[][] {
+                        { 1L, "Book title 1", "2010-05-26", "Author 1, The", "1950-01-15" },
+                        { 2L, "Book title 2", "2010-05-26", "Author 2, The", "1950-02-15" },
+                        { 3L, "Book title 3", "2010-05-26", "Author 3, The", "1950-03-15" },
+                        { 4L, "Book title 4", "2010-05-26", "Author 4, The", "1950-04-15" },
+                        { 5L, "Book title 5", "2010-05-26", "Author 5, The", "1950-05-15" },
+                        { 6L, "Book title 6", "2010-05-26", "Author 6, The", "1950-06-15" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void testElementWithMqlReadOutput() {
+    public void testElementWithMqlReadOutput() throws Exception {
         String mqlOutput = "{\"code\":\"/api/status/ok\",\"result\":[{\"armed_force\":{\"id\":\"/en/wehrmacht\"},\"id\":\"/en/afrika_korps\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/en/sacred_band_of_thebes\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/en/british_army\"},\"id\":\"/en/british_16_air_assault_brigade\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/en/british_army\"},\"id\":\"/en/pathfinder_platoon\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0ch7qgz\"},\"id\":\"/en/sacred_band\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/en/polish_navy\"},\"id\":\"/en/3rd_ship_flotilla\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c0kxn9\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c0kxq9\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c0kxqh\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c0kxqp\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c0kxqw\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c1wxl3\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0c1wxlp\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0ck96kz\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0cm3j23\",\"type\":\"/military/military_unit\"},{\"armed_force\":{\"id\":\"/m/0chtrwn\"},\"id\":\"/m/0cw8hb4\",\"type\":\"/military/military_unit\"}],\"status\":\"200 OK\",\"transaction_id\":\"cache;cache01.p01.sjc1:8101;2010-10-04T15:04:33Z;0007\"}";
 
         ObjectNode options = SUT.createParserUIInitializationData(
@@ -247,11 +299,32 @@ public class JsonImporterTests extends ImporterTest {
         JSONUtilities.safePut(options, "recordPath", path);
 
         RunTest(mqlOutput, options);
-        assertProjectCreated(project, 3, 16);
+
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - type", "_ - armed_force - id" },
+                new Serializable[][] {
+                        { "/en/afrika_korps", "/military/military_unit", "/en/wehrmacht" },
+                        { "/en/sacred_band_of_thebes", "/military/military_unit", "/m/0chtrwn" },
+                        { "/en/british_16_air_assault_brigade", "/military/military_unit", "/en/british_army" },
+                        { "/en/pathfinder_platoon", "/military/military_unit", "/en/british_army" },
+                        { "/en/sacred_band", "/military/military_unit", "/m/0ch7qgz" },
+                        { "/en/3rd_ship_flotilla", "/military/military_unit", "/en/polish_navy" },
+                        { "/m/0c0kxn9", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c0kxq9", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c0kxqh", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c0kxqp", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c0kxqw", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c1wxl3", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0c1wxlp", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0ck96kz", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0cm3j23", "/military/military_unit", "/m/0chtrwn" },
+                        { "/m/0cw8hb4", "/military/military_unit", "/m/0chtrwn" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
-    public void testJSONMinimumArray() {
+    public void testJSONMinimumArray() throws Exception {
         String ScraperwikiOutput = "[\n" +
                 "{\n" +
                 "        \"school\": \"University of Cambridge\\n" +
@@ -279,7 +352,17 @@ public class JsonImporterTests extends ImporterTest {
                 "    }\n" +
                 "]\n";
         RunTest(ScraperwikiOutput);
-        assertProjectCreated(project, 9, 2);
+
+        Project expectedProject = createProject(
+                new String[] { "_ - school", "_ - student-faculty-score", "_ - intl-student-score", "_ - intl-faculty-score", "_ - rank",
+                        "_ - peer-review-score", "_ - emp-review-score", "_ - score", "_ - citations-score" },
+                new Serializable[][] {
+                        { "University of Cambridge\n                            United Kingdom", "100", "95", "96", "#1", "100", "100",
+                                "100.0", "93" },
+                        { "Harvard University\n                            United States", "97", "87", "71", "#2", "100", "100", "99.2",
+                                "100" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     /**
@@ -295,66 +378,54 @@ public class JsonImporterTests extends ImporterTest {
         JSONTreeReader parser = new JSONTreeReader(new ByteArrayInputStream(sampleJson.getBytes("UTF-8")));
         Token token = Token.Ignorable;
         int i = 0;
-        try {
-            while (token != null) {
-                token = parser.next();
-                if (token == null) {
-                    break;
-                }
-                i++;
-                if (i == 3) {
-                    Assert.assertEquals(Token.Value, token);
-                    Assert.assertEquals("field", parser.getFieldName());
-                }
+        while (token != null) {
+            token = parser.next();
+            if (token == null) {
+                break;
             }
-        } catch (Exception e) {
-            // silent
+            i++;
+            if (i == 3) {
+                assertEquals(Token.Value, token);
+                assertEquals("field", parser.getFieldName());
+            }
         }
 
         parser = new JSONTreeReader(new ByteArrayInputStream(sampleJson2.getBytes("UTF-8")));
         token = Token.Ignorable;
         i = 0;
-        try {
-            while (token != null) {
-                token = parser.next();
-                if (token == null) {
-                    break;
-                }
-                i++;
-                if (i == 3) {
-                    Assert.assertEquals(Token.StartEntity, token);
-                    Assert.assertEquals(parser.getFieldName(), "field");
-                }
+        while (token != null) {
+            token = parser.next();
+            if (token == null) {
+                break;
             }
-        } catch (Exception e) {
-            // silent
+            i++;
+            if (i == 3) {
+                assertEquals(Token.StartEntity, token);
+                assertEquals(parser.getFieldName(), "field");
+            }
         }
 
         parser = new JSONTreeReader(new ByteArrayInputStream(sampleJson3.getBytes("UTF-8")));
         token = Token.Ignorable;
         i = 0;
-        try {
-            while (token != null) {
-                token = parser.next();
-                if (token == null) {
-                    break;
-                }
-                i++;
-                if (i == 3) {
-                    Assert.assertEquals(token, Token.StartEntity);
-                    Assert.assertEquals(parser.getFieldName(), "field");
-                }
-                if (i == 4) {
-                    Assert.assertEquals(token, Token.StartEntity);
-                    Assert.assertEquals(parser.getFieldName(), JsonImporter.ANONYMOUS);
-                }
-                if (i == 6) {
-                    Assert.assertEquals(token, Token.StartEntity);
-                    Assert.assertEquals(parser.getFieldName(), JsonImporter.ANONYMOUS);
-                }
+        while (token != null) {
+            token = parser.next();
+            if (token == null) {
+                break;
             }
-        } catch (Exception e) {
-            // silent
+            i++;
+            if (i == 3) {
+                assertEquals(token, Token.StartEntity);
+                assertEquals(parser.getFieldName(), "field");
+            }
+            if (i == 4) {
+                assertEquals(token, Token.StartEntity);
+                assertEquals(parser.getFieldName(), JsonImporter.ANONYMOUS);
+            }
+            if (i == 6) {
+                assertEquals(token, Token.StartEntity);
+                assertEquals(parser.getFieldName(), JsonImporter.ANONYMOUS);
+            }
         }
     }
 
@@ -366,88 +437,50 @@ public class JsonImporterTests extends ImporterTest {
         JSONTreeReader parser = new JSONTreeReader(new ByteArrayInputStream(sampleJson.getBytes("UTF-8")));
         Token token = Token.Ignorable;
         int i = 0;
-        try {
-            while (token != null) {
-                token = parser.next();
-                if (token == null) {
-                    break;
-                }
-                i++;
-                if (i == 3) {
-                    Assert.assertEquals(Token.Value, token);
-                    Assert.assertEquals("\tfield", parser.getFieldName());
-                    Assert.assertEquals("\tvalue", parser.getFieldValue());
-                }
+        while (token != null) {
+            token = parser.next();
+            if (token == null) {
+                break;
             }
-        } catch (Exception e) {
-            Assert.fail();
+            i++;
+            if (i == 3) {
+                assertEquals(Token.Value, token);
+                assertEquals("\tfield", parser.getFieldName());
+                assertEquals("\tvalue", parser.getFieldValue());
+            }
         }
     }
 
     @Test
     public void testJsonDatatypes() {
         RunTest(getSampleWithDataTypes());
-        assertProjectCreated(project, 2, 21, 4);
 
-        Assert.assertEquals(project.columnModel.getColumnByCellIndex(0).getName(), JsonImporter.ANONYMOUS + " - id");
-        Assert.assertEquals(project.columnModel.getColumnByCellIndex(1).getName(), JsonImporter.ANONYMOUS + " - cell - cell");
-
-        Row row = project.rows.get(8);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, ""); // Make sure empty strings are preserved
-
-        // null, true, false 0,1,-2.1,0.23,-0.24,3.14e100
-
-        row = project.rows.get(12);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertNull(row.cells.get(1).value);
-
-        row = project.rows.get(13);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Boolean.TRUE);
-
-        row = project.rows.get(14);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Boolean.FALSE);
-
-        row = project.rows.get(15);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Long.valueOf(0));
-
-        row = project.rows.get(16);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Long.valueOf(1));
-
-        row = project.rows.get(17);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Double.parseDouble("-2.1"));
-
-        row = project.rows.get(18);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Double.valueOf((double) 0.23));
-
-        row = project.rows.get(19);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertEquals(row.cells.get(1).value, Double.valueOf((double) -0.24));
-
-        row = project.rows.get(20);
-        Assert.assertNotNull(row);
-        Assert.assertEquals(row.cells.size(), 2);
-        Assert.assertFalse(Double.isNaN((Double) row.cells.get(1).value));
-        Assert.assertEquals(row.cells.get(1).value, Double.valueOf((double) 3.14e100));
-
-        // null, true, false 0,1,-2.1,0.23,-0.24,3.14e100
-
-        // TODO: check data types
+        Project expectedProject = createProject(
+                new String[] { "_ - id", "_ - cell - cell" },
+                new Serializable[][] {
+                        { 1L, "39766" },
+                        { null, "T1009" },
+                        { null, "foo" },
+                        { null, "DEU" },
+                        { null, "19" },
+                        { null, "01:49" },
+                        { 2L, "39766" },
+                        { null, "T1009" },
+                        { null, "" },
+                        { null, "DEU" },
+                        { null, "19" },
+                        { null, "01:49" },
+                        { null, null },
+                        { null, true },
+                        { null, false },
+                        { null, 0L },
+                        { null, 1L },
+                        { null, -2.1 },
+                        { null, 0.23 },
+                        { null, -0.24 },
+                        { null, 3.14E100 },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
@@ -459,6 +492,7 @@ public class JsonImporterTests extends ImporterTest {
                 ". \tcolumn groups number:" + project.columnModel.columnGroups.size() +
                 ".\trow number:" + project.rows.size() + ".\trecord number:" + project.recordModel.getRecordCount());
 
+        // we don't make specific assertions about project contents because the expected grid is rather big.
         assertProjectCreated(project, 63, 63, 8);
     }
 
@@ -493,8 +527,14 @@ public class JsonImporterTests extends ImporterTest {
                 -1,
                 options,
                 exceptions);
-        Assert.assertNotNull(project.columnModel.getColumnByName("File"));
-        Assert.assertEquals(project.rows.get(0).getCell(0).value, "json-sample-format-1.json");
+
+        Project expectedProject = createProject(
+                new String[] { "File", "_ - library - _ - book1 - genre", "_ - library - _ - book1 - author - author-name",
+                        "_ - library - _ - book1 - author - author-dob" },
+                new Serializable[][] {
+                        { "json-sample-format-1.json", "genre1", "author1", "date" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     // ------------helper methods---------------
@@ -528,6 +568,23 @@ public class JsonImporterTests extends ImporterTest {
             }
         }
         sb.append("]");
+        return sb.toString();
+    }
+
+    static String getSampleWithComments() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int i = 1; i < 7; i++) {
+            sb.append(getTypicalElement(i));
+            if (i < 6) {
+                sb.append(",");
+            }
+        }
+        sb.append("// zyadtaha testing c++ commments \n");
+        sb.append("/* zyadtaha testing c commments */ \n");
+        sb.append("# zyadtaha testing python commments \n");
+        sb.append("]");
+        System.out.println(sb.toString());
         return sb.toString();
     }
 
@@ -646,17 +703,9 @@ public class JsonImporterTests extends ImporterTest {
     }
 
     private void RunTest(String testString, ObjectNode options) {
-        try {
-            inputStream = new ByteArrayInputStream(testString.getBytes("UTF-8"));
-        } catch (UnsupportedEncodingException e1) {
-            Assert.fail();
-        }
+        inputStream = new ByteArrayInputStream(testString.getBytes(StandardCharsets.UTF_8));
 
-        try {
-            parseOneInputStream(SUT, inputStream, options);
-        } catch (Exception e) {
-            Assert.fail();
-        }
+        parseOneInputStream(SUT, inputStream, options);
     }
 
     private String getComplexJSON(String fileName) throws IOException {

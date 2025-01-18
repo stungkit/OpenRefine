@@ -29,11 +29,12 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.LineNumberReader;
+import java.io.Serializable;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Properties;
 
-import org.openrefine.wikibase.testing.WikidataRefineTest;
+import edu.mit.simile.butterfly.ButterflyModule;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -45,7 +46,7 @@ import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.Pool;
 import com.google.refine.util.TestUtils;
 
-import edu.mit.simile.butterfly.ButterflyModule;
+import org.openrefine.wikibase.testing.WikidataRefineTest;
 
 public abstract class OperationTest extends WikidataRefineTest {
 
@@ -55,7 +56,11 @@ public abstract class OperationTest extends WikidataRefineTest {
 
     @BeforeMethod
     public void setUp() {
-        project = createCSVProject("a,b\nc,d");
+        project = createProject(
+                new String[] { "a", "b" },
+                new Serializable[][] {
+                        { "c", "d" }
+                });
         module = mock(ButterflyModule.class);
         when(module.getName()).thenReturn("wikidata");
         pool = new Pool();
@@ -78,7 +83,7 @@ public abstract class OperationTest extends WikidataRefineTest {
         AbstractOperation op = reconstruct();
         StringWriter writer = new StringWriter();
         ParsingUtilities.defaultWriter.writeValue(writer, op);
-        TestUtils.assertEqualAsJson(json, writer.toString());
+        TestUtils.assertEqualsAsJson(writer.toString(), json);
     }
 
     protected LineNumberReader makeReader(String input) {

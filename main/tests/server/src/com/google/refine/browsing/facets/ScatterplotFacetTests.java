@@ -27,21 +27,28 @@
 
 package com.google.refine.browsing.facets;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import java.io.IOException;
-
-import org.testng.annotations.Test;
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.Set;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
 import com.google.refine.RefineTest;
 import com.google.refine.browsing.Engine;
 import com.google.refine.browsing.RowFilter;
-import com.google.refine.browsing.facets.ScatterplotFacet;
 import com.google.refine.browsing.facets.ScatterplotFacet.ScatterplotFacetConfig;
-import com.google.refine.model.Cell;
+import com.google.refine.expr.MetaParser;
+import com.google.refine.grel.Parser;
 import com.google.refine.model.Project;
 import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.TestUtils;
@@ -65,6 +72,23 @@ public class ScatterplotFacetTests extends RefineTest {
             "          \"name\": \"my column (x) vs. e (y)\"\n" +
             "        }";
 
+    public static String configJsonWithParseError = "{\n" +
+            "          \"to_x\": 1,\n" +
+            "          \"to_y\": 1,\n" +
+            "          \"dot\": 1,\n" +
+            "          \"from_x\": 0.21333333333333335,\n" +
+            "          \"l\": 150,\n" +
+            "          \"type\": \"scatterplot\",\n" +
+            "          \"from_y\": 0.26666666666666666,\n" +
+            "          \"dim_y\": \"lin\",\n" +
+            "          \"ex\": \"value\",\n" +
+            "          \"dim_x\": \"lin\",\n" +
+            "          \"ey\": \"foo(\",\n" +
+            "          \"cx\": \"my column\",\n" +
+            "          \"cy\": \"e\",\n" +
+            "          \"name\": \"my column (x) vs. e (y)\"\n" +
+            "        }";
+
     public static String facetJson = "{"
             + "\"name\":\"my column (x) vs. e (y)\","
             + "\"cx\":\"my column\","
@@ -83,6 +107,16 @@ public class ScatterplotFacetTests extends RefineTest {
             + "\"to_y\":1"
             + "}";
 
+    @BeforeMethod
+    public void registerGRELParser() {
+        MetaParser.registerLanguageParser("grel", "GREL", Parser.grelParser, "value");
+    }
+
+    @AfterMethod
+    public void unregisterGRELParser() {
+        MetaParser.unregisterLanguageParser("grel");
+    }
+
     @Test
     public void serializeScatterplotFacetConfig() throws JsonParseException, JsonMappingException, IOException {
         ScatterplotFacetConfig config = ParsingUtilities.mapper.readValue(configJson, ScatterplotFacetConfig.class);
@@ -91,18 +125,15 @@ public class ScatterplotFacetTests extends RefineTest {
 
     @Test
     public void serializeScatterplotFacet() throws JsonParseException, JsonMappingException, IOException {
-        Project project = createCSVProject("my column,e\n"
-                + "89.2,89.2\n" +
-                "-45.9,-45.9\n" +
-                "blah,blah\n" +
-                "0.4,0.4\n");
+        Project project = createProject(
+                new String[] { "my column", "e" },
+                new Serializable[][] {
+                        { 89.2, 89.2 },
+                        { -45.9, -45.9 },
+                        { "blah", "blah" },
+                        { 0.4, 0.4 }
+                });
         Engine engine = new Engine(project);
-        project.rows.get(0).cells.set(0, new Cell(89.2, null));
-        project.rows.get(0).cells.set(1, new Cell(89.2, null));
-        project.rows.get(1).cells.set(0, new Cell(-45.9, null));
-        project.rows.get(1).cells.set(1, new Cell(-45.9, null));
-        project.rows.get(3).cells.set(0, new Cell(0.4, null));
-        project.rows.get(3).cells.set(1, new Cell(0.4, null));
 
         ScatterplotFacetConfig config = ParsingUtilities.mapper.readValue(configJson, ScatterplotFacetConfig.class);
 
@@ -114,5 +145,17 @@ public class ScatterplotFacetTests extends RefineTest {
         assertTrue(filter.filterRow(project, 0, project.rows.get(0)));
         assertFalse(filter.filterRow(project, 1, project.rows.get(1)));
         assertTrue(filter.filterRow(project, 3, project.rows.get(3)));
+    }
+
+    @Test
+    public void testColumnDependencies() throws Exception {
+        ScatterplotFacetConfig facetConfig = ParsingUtilities.mapper.readValue(configJson, ScatterplotFacetConfig.class);
+        assertEquals(facetConfig.getColumnDependencies(), Optional.of(Set.of("my column", "e")));
+    }
+
+    @Test
+    public void testColumnDependenciesWithError() throws Exception {
+        ScatterplotFacetConfig facetConfig = ParsingUtilities.mapper.readValue(configJsonWithParseError, ScatterplotFacetConfig.class);
+        assertEquals(facetConfig.getColumnDependencies(), Optional.of(Collections.emptySet()));
     }
 }

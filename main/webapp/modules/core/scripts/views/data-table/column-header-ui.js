@@ -31,11 +31,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
 
-function DataTableColumnHeaderUI(dataTableView, column, columnIndex, td) {
+function DataTableColumnHeaderUI(dataTableView, column, columnIndex, td, col) {
   this._dataTableView = dataTableView;
   this._column = column;
   this._columnIndex = columnIndex;
   this._td = td;
+  this._col = col;
 
   this._render();
 }
@@ -70,6 +71,34 @@ DataTableColumnHeaderUI.prototype._render = function() {
     self._createMenuForColumnHeader(this);
   });
 
+  var serviceUrl = null;
+  if (this._column.reconConfig) {
+   serviceUrl = this._column.reconConfig.service;
+  }
+  if (serviceUrl) {
+    try {
+      var service = null;
+      var serviceLogo = null;
+      if (new URL(serviceUrl)) {
+        service = ReconciliationManager.getServiceFromUrl(serviceUrl);
+      }
+      if (service) {
+        serviceLogo = service.logo;
+      }
+
+      var img = $("<img>");
+      if (serviceLogo) {
+        var imageUrl = new URL(serviceLogo).toString(); // throws an exception if the format is invalid
+        img.attr("src", imageUrl);
+        img.attr("title", service.name);
+        img.addClass("serviceLogo")
+        img.appendTo(elmts.serviceLogoContainer.show());
+      }
+    } catch {
+      console.log("Invalid logo URL supplied by service "+serviceUrl);
+    }
+  }
+
   if ("reconStats" in this._column) {
     var stats = this._column.reconStats;
     if (stats.nonBlanks > 0) {
@@ -92,6 +121,18 @@ DataTableColumnHeaderUI.prototype._render = function() {
       .addClass("column-header-recon-stats-matched")
       .width(Math.round(stats.matchedTopics * 100 / stats.nonBlanks) + "%")
       .appendTo(whole);
+    }
+  }
+  if("sourceReconConfig" in this._column) {
+    if(this._column.sourceReconConfig.service){
+     var service = ReconciliationManager.getServiceFromUrl(this._column.sourceReconConfig.service);
+     var serviceName;
+     if(service) {
+       serviceName=service.name;
+     }
+     if(serviceName){
+      elmts.nameContainer.attr("title",$.i18n('core-views/data-extended-from',service.name));
+      }
     }
   }
 };

@@ -1,21 +1,22 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.google.refine.util.ParsingUtilities;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.MediaInfoEdit;
-import org.openrefine.wikibase.updates.MediaInfoEditBuilder;
-import org.testng.annotations.Test;
-import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiApiErrorException;
-
-import java.io.IOException;
-import java.util.regex.Pattern;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.testng.annotations.Test;
+import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiApiErrorException;
+
+import com.google.refine.util.ParsingUtilities;
+
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.MediaInfoEdit;
+import org.openrefine.wikibase.updates.MediaInfoEditBuilder;
 
 public class FileNameScrutinizerTest extends ScrutinizerTest {
 
@@ -39,10 +40,12 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
     public void testSameFileNameTwice() throws IOException, MediaWikiApiErrorException {
         MediaInfoEdit edit1 = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("Some_filename.png")
+                .addContributingRowId(123)
                 .build();
 
         MediaInfoEdit edit2 = new MediaInfoEditBuilder(TestingData.newMidB)
                 .addFileName("some filename.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit1, edit2);
@@ -61,16 +64,95 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
                         "very_very_very_very_very_very_very_very_very_very_" +
                         "very_very_very_very_very_very_very_very_very_very_" +
                         "long_filename.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
         assertWarningsRaised(FileNameScrutinizer.fileNameTooLongType);
     }
 
+    @Test()
+    public void testValidCharactersInFilenameOdiaScript() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("ଫାଇଲ.wav")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertNoWarningRaised();
+    }
+
+    @Test
+    public void testValidCharactersInFilenameNonAscii() {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("সমাচার দর্পণ - ৮ অক্টোবর ১৮৩৬.pdf")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertNoWarningRaised();
+    }
+
+    @Test()
+    public void testInvalidCharactersInFilenameTab() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("Tabs (\t) are not allowed.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertWarningsRaised(FileNameScrutinizer.invalidCharactersInFileNameType);
+    }
+
+    @Test()
+    public void testInvalidCharactersInFilenameNewLine() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("New lines (\n) are not allowed.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertWarningsRaised(FileNameScrutinizer.invalidCharactersInFileNameType);
+    }
+
+    @Test()
+    public void testInvalidCharactersInFilenameCarriageReturn() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("Carriage returns (\r) are not allowed.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertWarningsRaised(FileNameScrutinizer.invalidCharactersInFileNameType);
+    }
+
+    @Test()
+    public void testInvalidCharactersInFilenameFormFeed() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("Form feeds (\f) are not allowed.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertWarningsRaised(FileNameScrutinizer.invalidCharactersInFileNameType);
+    }
+
+    @Test()
+    public void testInvalidCharactersInFilenameBackspace() throws IOException, MediaWikiApiErrorException {
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
+                .addFileName("Backspaces (\b) are not allowed.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+        assertWarningsRaised(FileNameScrutinizer.invalidCharactersInFileNameType);
+    }
+
     @Test
     public void testInvalidCharactersInFilenameVerticalBar() throws IOException, MediaWikiApiErrorException {
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("vertical bars (|) are not allowed.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
@@ -81,6 +163,7 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
     public void testInvalidCharactersInFilenameHTMLEscaped() throws IOException, MediaWikiApiErrorException {
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("HTML escaped entities such as &nbsp; are not allowed.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
@@ -91,6 +174,7 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
     public void testNoExtension() throws IOException, MediaWikiApiErrorException {
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("Look, no extension")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
@@ -102,6 +186,7 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("Some_image.png")
                 .addFilePath("tmp/Some_sound.ogg")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
@@ -117,6 +202,7 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
 
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("Does exist.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
@@ -131,11 +217,28 @@ public class FileNameScrutinizerTest extends ScrutinizerTest {
 
         MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.newMidA)
                 .addFileName("Does exist.png")
+                .addContributingRowId(123)
                 .build();
 
         scrutinize(edit);
 
         assertNoWarningRaised();
         verifyNoInteractions(connection);
+    }
+
+    @Test
+    public void testAlreadyExistsOnWikiNewVersion() throws IOException, MediaWikiApiErrorException {
+        // mock API call to search for existing filenames
+        when(connection.sendJsonRequest(any(), any())).thenReturn(apiResponseFound);
+
+        MediaInfoEdit edit = new MediaInfoEditBuilder(TestingData.matchedMid)
+                .addFileName("Matched.png")
+                .addFilePath("/path/to/Matched.png")
+                .addContributingRowId(123)
+                .build();
+
+        scrutinize(edit);
+
+        assertWarningsRaised(FileNameScrutinizer.uploadNewFileVersionType);
     }
 }

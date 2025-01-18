@@ -30,13 +30,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.openrefine.wikibase.qa.QAWarning;
-import org.openrefine.wikibase.qa.QAWarningStore;
-import org.openrefine.wikibase.schema.exceptions.QAWarningException;
-import org.openrefine.wikibase.schema.exceptions.SkipSchemaExpressionException;
-import org.openrefine.wikibase.schema.validation.ValidationState;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.testing.WikidataRefineTest;
+import okhttp3.mockwebserver.Dispatcher;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -50,10 +47,13 @@ import com.google.refine.model.Project;
 import com.google.refine.model.Recon;
 import com.google.refine.model.Row;
 
-import okhttp3.mockwebserver.Dispatcher;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import okhttp3.mockwebserver.RecordedRequest;
+import org.openrefine.wikibase.qa.QAWarning;
+import org.openrefine.wikibase.qa.QAWarningStore;
+import org.openrefine.wikibase.schema.exceptions.QAWarningException;
+import org.openrefine.wikibase.schema.exceptions.SkipSchemaExpressionException;
+import org.openrefine.wikibase.schema.validation.ValidationState;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.testing.WikidataRefineTest;
 
 public class WbExpressionTest<T> extends WikidataRefineTest {
 
@@ -88,8 +88,11 @@ public class WbExpressionTest<T> extends WikidataRefineTest {
     @BeforeMethod
     public void createProject()
             throws IOException, ModelException {
-        project = createCSVProject("Wikidata variable test project",
-                "column A,column B,column C,column D,column E\n" + "value A,value B,value C,value D,value E");
+        project = createProject("Wikidata variable test project",
+                new String[] { "column A", "column B", "column C", "column D", "column E" },
+                new Serializable[][] {
+                        { "value A", "value B", "value C", "value D", "value E" }
+                });
         warningStore = new QAWarningStore();
         row = project.rows.get(0);
         ctxt = new ExpressionContext("http://www.wikidata.org/entity/", Collections.emptyMap(), server.url("/w/api.php").toString(), 0, row,
@@ -223,7 +226,8 @@ public class WbExpressionTest<T> extends WikidataRefineTest {
                 row.cells.add(cell);
             }
         }
-        ctxt = new ExpressionContext("http://www.wikidata.org/entity/", Collections.emptyMap(), server.url("/w/api.php").toString(), 0, row,
+        ctxt = new ExpressionContext("http://www.wikidata.org/entity/", Collections.emptyMap(), server.url("/w/api.php").toString(), 123,
+                row,
                 project.columnModel, warningStore);
     }
 

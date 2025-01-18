@@ -66,9 +66,15 @@ HistoryPanel.prototype.update = function(onDone) {
   );
 };
 
+// returns the changes "in the future", i.e. changes that have been undone
+// and will be erased by any new operation applied in this state
+HistoryPanel.prototype.undoneChanges = function() {
+  var self = this;
+  return self._data.future;
+}
+
 HistoryPanel.prototype._render = function() {
   var self = this;
-
   this._tabHeader.html($.i18n('core-project/undo-redo')+' <span class="count">' + this._data.past.length + ' / ' + ( this._data.future.length + this._data.past.length ) + '</span>');
 
   this._div.empty().off().html(DOM.loadHTML("core", "scripts/project/history-panel.html"));
@@ -172,7 +178,7 @@ HistoryPanel.prototype._onClickHistoryEntry = function(evt, entry, lastDoneID) {
       "undo-redo",
       { lastDoneID: lastDoneID },
       null,
-      { everythingChanged: true }
+      { everythingChanged: true, warnAgainstHistoryErasure: false }
   );
 };
 
@@ -191,154 +197,10 @@ HistoryPanel.prototype._extractOperations = function() {
 };
 
 HistoryPanel.prototype._showExtractOperationsDialog = function(json) {
-  var self = this;
-  var frame = $(DOM.loadHTML("core", "scripts/project/history-extract-dialog.html"));
-  var elmts = DOM.bind(frame);
-
-  elmts.dialogHeader.html($.i18n('core-project/extract-history'));
-  elmts.textarea.attr('aria-label',$.i18n('core-project/operation-history-json'))
-  elmts.or_proj_extractSave.html($.i18n('core-project/extract-save'));
-  elmts.selectAllButton.html($.i18n('core-buttons/select-all'));
-  elmts.deselectAllButton.html($.i18n('core-buttons/deselect-all'));
-  elmts.saveJsonAsFileButton.html($.i18n('core-buttons/export'))
-  elmts.closeButton.html($.i18n('core-buttons/close'));
-
-  var entryTable = elmts.entryTable[0];
-  var createEntry = function(entry) {
-    var tr = entryTable.insertRow(entryTable.rows.length);
-    var td0 = tr.insertCell(0);
-    var td1 = tr.insertCell(1);
-    td0.width = "1%";
-
-    if ("operation" in entry) {
-      entry.selected = true;
-
-      $('<input type="checkbox" checked="true" />').appendTo(td0).on('click',function() {
-        entry.selected = !entry.selected;
-        updateJson();
-      });
-
-      $('<span>').text(entry.operation.description).appendTo(td1);
-    } else {
-      $('<span>').text(entry.description).css("color", "#888").appendTo(td1);
-    }
-  };
-  for (var i = 0; i < json.entries.length; i++) {
-    createEntry(json.entries[i]);
-  }
-
-  var updateJson = function() {
-    var a = [];
-    for (var i = 0; i < json.entries.length; i++) {
-      var entry = json.entries[i];
-      if ("operation" in entry && entry.selected) {
-        a.push(entry.operation);
-      }
-    }
-    elmts.textarea.text(JSON.stringify(a, null, 2));
-  };
-  updateJson();
-
-  elmts.closeButton.on('click',function() { DialogSystem.dismissUntil(level - 1); });
-  elmts.selectAllButton.on('click',function() {
-    for (var i = 0; i < json.entries.length; i++) {
-      json.entries[i].selected = true;
-    }
-
-    frame.find('input[type="checkbox"]').prop('checked', true);
-    updateJson();
-  });
-  elmts.deselectAllButton.on('click',function() {
-    for (var i = 0; i < json.entries.length; i++) {
-      json.entries[i].selected = false;
-    }
-
-    frame.find('input[type="checkbox"]').prop('checked', false);
-    updateJson();
-  });
-  elmts.saveJsonAsFileButton.on('click',function() {
-    var historyJson = elmts.textarea[0].value;
-
-    downloadFile('history.json', historyJson);
-  });
-
-  // Function originally created by Matěj Pokorný at StackOverflow:
-  // https://stackoverflow.com/a/18197341/5564816
-  var downloadFile = function(filename, content) {
-    var element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-    element.setAttribute('download', filename);
-
-    element.style.display = 'none';
-    document.body.appendChild(element);
-
-    element.click();
-    document.body.removeChild(element);
-  }
-
-  var level = DialogSystem.showDialog(frame);
-
-  elmts.textarea[0].select();
+  new ExtractOperationsDialog(json);
 };
 
 HistoryPanel.prototype._showApplyOperationsDialog = function() {
-  var self = this;
-  var frame = $(DOM.loadHTML("core", "scripts/project/history-apply-dialog.html"));
-  var elmts = DOM.bind(frame);
-  
-  elmts.dialogHeader.html($.i18n('core-project/apply-operation'));
-  elmts.or_proj_pasteJson.html($.i18n('core-project/paste-json'));
-  
-  elmts.applyButton.html($.i18n('core-buttons/perform-op'));
-  elmts.cancelButton.html($.i18n('core-buttons/cancel'));
-
-  var fixJson = function(json) {
-    json = json.trim();
-    if (!json.startsWith("[")) {
-      json = "[" + json;
-    }
-    if (!json.endsWith("]")) {
-      json = json + "]";
-    }
-
-    return json.replace(/\}\s*\,\s*\]/g, "} ]").replace(/\}\s*\{/g, "}, {");
-  };
-
-  elmts.applyButton.on('click',function() {
-    var json;
-
-    try {
-      json = elmts.textarea[0].value;
-      json = fixJson(json);
-      json = JSON.parse(json);
-    } catch (e) {
-      alert($.i18n('core-project/json-invalid')+".");
-      return;
-    }
-
-    Refine.postCoreProcess(
-        "apply-operations",
-        {},
-        { operations: JSON.stringify(json) },
-        { everythingChanged: true },
-        {
-          onDone: function(o) {
-            if (o.code == "pending") {
-              // Something might have already been done and so it's good to update
-              Refine.update({ everythingChanged: true });
-            }
-          }
-        }
-    );
-
-    DialogSystem.dismissUntil(level - 1);
-  });
-
-  elmts.cancelButton.on('click',function() {
-    DialogSystem.dismissUntil(level - 1);
-  });
-
-  var level = DialogSystem.showDialog(frame);
-
-  elmts.textarea.trigger('focus');
+  new ApplyOperationsDialog();
 };
+

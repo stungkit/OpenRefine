@@ -35,6 +35,8 @@ package com.google.refine.operations.column;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.commons.lang.Validate;
+
 import com.google.refine.history.Change;
 import com.google.refine.history.HistoryEntry;
 import com.google.refine.model.AbstractOperation;
@@ -53,6 +55,12 @@ public class ColumnRenameOperation extends AbstractOperation {
             @JsonProperty("newColumnName") String newColumnName) {
         _oldColumnName = oldColumnName;
         _newColumnName = newColumnName;
+    }
+
+    @Override
+    public void validate() {
+        Validate.notNull(_oldColumnName, "Missing old column name");
+        Validate.notNull(_newColumnName, "Missing new column name");
     }
 
     @JsonProperty("oldColumnName")

@@ -11,7 +11,7 @@
   <parent>
     <groupId>org.openrefine</groupId>
     <artifactId>openrefine</artifactId>
-    <version>3.8-SNAPSHOT</version>
+    <version>3.10-SNAPSHOT</version>
   </parent>
 
   <properties>
@@ -42,7 +42,6 @@
         <directory>tests/data</directory>
       </testResource>
     </testResources>
-    <outputDirectory>webapp/WEB-INF/classes</outputDirectory>
     <plugins>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
@@ -96,9 +95,23 @@
 	<version>${maven-jar-plugin.version}</version>
         <executions>
           <execution>
+            <id>default-jar</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>webapp/WEB-INF/lib</outputDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>test-jar</id>
             <goals>
               <goal>test-jar</goal>
             </goals>
+            <configuration>
+              <skip>${skipTests}</skip>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -153,6 +166,8 @@
         <configuration>
           <excludes>
             <exclude>org/marc4j/converter/impl/*CodeTableGenerated*</exclude>
+            <!-- Metaphone3 should be an external library and has many instructions, dominating our actual code in coverage reports -->
+            <exclude>com/google/refine/clustering/binning/Metaphone3.class</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -166,6 +181,16 @@
       <artifactId>javax.servlet-api</artifactId>
       <version>${servlet-api.version}</version>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openrefine</groupId>
+      <artifactId>core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openrefine</groupId>
+      <artifactId>grel</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.openrefine.dependencies</groupId>
@@ -206,6 +231,7 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
       <version>${commons-lang3.version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>commons-fileupload</groupId>
@@ -213,23 +239,13 @@
       <version>${commons-fileupload.version}</version>
     </dependency>
     <dependency>
-      <groupId>commons-collections</groupId>
-      <artifactId>commons-collections</artifactId>
-      <version>${commons-collections.version}</version>
-    </dependency>
-    <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-text</artifactId>
 	<version>${commons-text.version}</version>
     </dependency>
     <dependency>
-      <groupId>commons-validator</groupId>
-      <artifactId>commons-validator</artifactId>
-      <version>${commons-validator.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>velocity</groupId>
-      <artifactId>velocity</artifactId>
+      <groupId>org.apache.velocity</groupId>
+      <artifactId>velocity-engine-core</artifactId>
       <version>${velocity.version}</version>
     </dependency>
     <dependency>
@@ -238,19 +254,9 @@
       <version>${marc4j.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-compress</artifactId>
-      <version>${commons-compress.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.jsoup</groupId>
-      <artifactId>jsoup</artifactId>
-      <version>${jsoup.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.openrefine.dependencies</groupId>
-      <artifactId>opencsv-multichar</artifactId>
-      <version>${opencsv-multichar.version}</version>
+      <groupId>com.univocity</groupId>
+      <artifactId>univocity-parsers</artifactId>
+      <version>${univocity-csv.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.poi</groupId>
@@ -313,9 +319,9 @@
       <version>${httpclient5.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-      <version>${httpcore.version}</version>
+      <groupId>org.apache.httpcomponents.core5</groupId>
+      <artifactId>httpcore5</artifactId>
+      <version>${httpcore5.version}</version>
     </dependency>
     <dependency>
       <groupId>org.sweble.wikitext</groupId>
@@ -353,7 +359,7 @@
       <artifactId>jaxb-api</artifactId>
       <version>${jaxb-api.version}</version>
     </dependency>
-    <dependency>
+    <dependency> <!-- Mozilla Public License Version 1.1 - for details see /OpenRefine/packaging/manual_licenses.xml -->
       <groupId>com.github.albfernandez</groupId>
       <artifactId>juniversalchardet</artifactId>
       <version>${juniversalchardet.version}</version>
@@ -364,20 +370,19 @@
       <version>${jetty.version}</version>
     </dependency>
 
-    <!-- Language detector api -->
-    <dependency>
-      <groupId>com.optimaize.languagedetector</groupId>
-      <artifactId>language-detector</artifactId>
-      <version>0.6</version>
-    </dependency>
-    <!-- ############################ -->
-
     <!-- test dependencies -->
 
     <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
       <version>${testng.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.openrefine</groupId>
+      <artifactId>core</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
     <dependency>

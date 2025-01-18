@@ -24,16 +24,17 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
 import org.wikidata.wdtk.datamodel.interfaces.ItemIdValue;
 import org.wikidata.wdtk.datamodel.interfaces.Statement;
+
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public abstract class StatementScrutinizerTest extends ScrutinizerTest {
 
     public void scrutinize(Statement statement) {
         TermedStatementEntityEdit update = new ItemEditBuilder((ItemIdValue) statement.getClaim().getSubject())
-                .addStatement(add(statement)).build();
+                .addStatement(add(statement)).addContributingRowId(123).build();
         scrutinize(update);
     }
 

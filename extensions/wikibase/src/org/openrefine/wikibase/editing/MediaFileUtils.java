@@ -1,15 +1,31 @@
 
 package org.openrefine.wikibase.editing;
 
+import java.io.Closeable;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URL;
-import java.util.*;
+import java.nio.file.Files;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.interfaces.MediaInfoIdValue;
 import org.wikidata.wdtk.wikibaseapi.ApiConnection;
@@ -18,10 +34,6 @@ import org.wikidata.wdtk.wikibaseapi.apierrors.MaxlagErrorException;
 import org.wikidata.wdtk.wikibaseapi.apierrors.MediaWikiApiErrorException;
 import org.wikidata.wdtk.wikibaseapi.apierrors.TokenErrorException;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.refine.util.ParsingUtilities;
 
 /**
@@ -32,10 +44,14 @@ import com.google.refine.util.ParsingUtilities;
  */
 public class MediaFileUtils {
 
+    static final Logger logger = LoggerFactory.getLogger(MediaFileUtils.class);
+
     protected ApiConnection apiConnection;
     protected String csrfToken = null;
     protected int maxLagWaitTime = 5000; // ms
     protected String filePrefix = "File:"; // configurable?
+    protected double backoffFactor = 1.5;
+    protected int maxRetries = 14;
 
     public MediaFileUtils(ApiConnection wdtkConnection) {
         apiConnection = wdtkConnection;
@@ -64,8 +80,35 @@ public class MediaFileUtils {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("action", "purge");
         parameters.put("pageids", Long.toString(pageid));
-
-        apiConnection.sendJsonRequest("POST", parameters);
+        parameters.put("errorformat", "raw");
+        int retries = maxRetries;
+        long backOffTime = maxLagWaitTime;
+        while (retries > 0) {
+            try {
+                JsonNode response = apiConnection.sendJsonRequest("POST", parameters);
+                boolean rateLimitError = response != null && StreamSupport.stream(response.path("warnings").spliterator(), false)
+                        .anyMatch(warning -> warning.has("code") && "ratelimited".equals(warning.get("code").asText()));
+                if (!rateLimitError) {
+                    return;
+                }
+            } catch (MediaWikiApiErrorException | IOException e) {
+            }
+            retries--;
+            if (retries > 0) {
+                logger.info(String.format("-- purgePage:API error. %d attempts left. Pausing %d secs before retry.", retries,
+                        backOffTime / 1000));
+                try {
+                    Thread.sleep(backOffTime);
+                } catch (InterruptedException e1) {
+                    Thread.currentThread().interrupt();
+                    retries = 0;
+                }
+                backOffTime *= (long) backoffFactor;
+            }
+        }
+        if (retries <= 0) {
+            throw new MediaWikiApiErrorException("page", "Purge failed");
+        }
     }
 
     /**
@@ -81,12 +124,24 @@ public class MediaFileUtils {
      *            the edit summary associated with the upload
      * @param tags
      *            tags to apply to the edit
+     * @param shouldChunk
+     *            whether the file should be uploaded in chunks
+     * @param newVersion
+     *            true when we expect the file to already exist, in which case we want to upload a new version
      * @return
      * @throws IOException
      * @throws MediaWikiApiErrorException
      */
-    public MediaUploadResponse uploadLocalFile(File path, String fileName, String wikitext, String summary, List<String> tags)
+    public MediaUploadResponse uploadLocalFile(File path, String fileName, String wikitext, String summary, List<String> tags,
+            boolean shouldChunk, boolean newVersion)
             throws IOException, MediaWikiApiErrorException {
+        if (shouldChunk) {
+            try (ChunkedFile chunkedFile = new ChunkedFile(path)) {
+                logger.info("Uploading large file in chunks.");
+                return uploadLocalFileChunked(chunkedFile, fileName, wikitext, summary, tags, newVersion);
+            }
+        }
+
         Map<String, String> parameters = new HashMap<>();
         parameters.put("action", "upload");
         parameters.put("tags", String.join("|", tags));
@@ -97,7 +152,70 @@ public class MediaFileUtils {
         Map<String, ImmutablePair<String, java.io.File>> files = new HashMap<>();
         files.put("file", new ImmutablePair<String, File>(fileName, path));
 
-        return uploadFile(parameters, files);
+        return uploadFile(parameters, files, newVersion);
+    }
+
+    /**
+     * Upload a local file to the MediaWiki instance in chunks.
+     * 
+     * @param path
+     *            ChunkedFile of the local file
+     * @param fileName
+     *            its filename once stored on the wiki
+     * @param wikitext
+     *            the accompanying wikitext for the file
+     * @param summary
+     *            the edit summary associated with the upload
+     * @param tags
+     *            tags to apply to the edit
+     * @return
+     * @throws IOException
+     * @throws MediaWikiApiErrorException
+     */
+    protected MediaUploadResponse uploadLocalFileChunked(ChunkedFile path, String fileName, String wikitext, String summary,
+            List<String> tags, boolean newVersion)
+            throws IOException, MediaWikiApiErrorException {
+        MediaUploadResponse response = null;
+        int i = 1;
+        long totalChunks = (long) Math.ceil((double) path.getLength() / path.chunkSize);
+        logger.debug("# of chunks: " + totalChunks);
+        for (File chunk = path.readChunk(); chunk != null; chunk = path.readChunk()) {
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put("action", "upload");
+            parameters.put("token", getCsrfToken());
+            parameters.put("stash", "1");
+            parameters.put("filename", fileName);
+            parameters.put("filesize", String.valueOf(path.getLength()));
+            if (response == null) {
+                // In the first request we don't have offset or file key.
+                parameters.put("offset", "0");
+            } else {
+                parameters.put("offset", String.valueOf(response.offset));
+                parameters.put("filekey", response.filekey);
+            }
+            Map<String, ImmutablePair<String, java.io.File>> files = new HashMap<>();
+            String chunkName = "chunk-" + i + path.getExtension();
+            files.put("chunk", new ImmutablePair<String, File>(chunkName, chunk));
+            response = uploadFile(parameters, files, newVersion);
+            chunk.delete();
+            response.checkForErrors();
+            double percent = (double) i / totalChunks * 100.0;
+            logger.debug(i + "/" + totalChunks + " chunks uploaded (" + String.format("%.2f", percent) + " %).");
+            i++;
+        }
+
+        logger.info("All chunks uploaded.");
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("action", "upload");
+        parameters.put("token", getCsrfToken());
+        parameters.put("filename", fileName);
+        parameters.put("filekey", response.filekey);
+        parameters.put("tags", String.join("|", tags));
+        parameters.put("comment", summary);
+        parameters.put("text", wikitext);
+        logger.info("Chunked upload committed.");
+
+        return uploadFile(parameters, null, newVersion);
     }
 
     /**
@@ -114,11 +232,14 @@ public class MediaFileUtils {
      *            the edit summary associated with the upload
      * @param tags
      *            tags to apply to the edit
+     * @param newVersion
+     *            true when we expect the file to exist already, in which case we want to upload a new version
      * @return
      * @throws IOException
      * @throws MediaWikiApiErrorException
      */
-    public MediaUploadResponse uploadRemoteFile(URL url, String fileName, String wikitext, String summary, List<String> tags)
+    public MediaUploadResponse uploadRemoteFile(URL url, String fileName, String wikitext, String summary, List<String> tags,
+            boolean newVersion)
             throws IOException, MediaWikiApiErrorException {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("action", "upload");
@@ -130,7 +251,7 @@ public class MediaFileUtils {
         parameters.put("url", url.toExternalForm());
         Map<String, ImmutablePair<String, java.io.File>> files = Collections.emptyMap();
 
-        return uploadFile(parameters, files);
+        return uploadFile(parameters, files, newVersion);
     }
 
     /**
@@ -144,12 +265,13 @@ public class MediaFileUtils {
      *            the edit summary
      * @param tags
      *            any tags that should be applied to the edit
+     * @return the revision id created by the edit
      * @throws IOException
      *             if a network error happened
      * @throws MediaWikiApiErrorException
      *             if the editing failed for some reason, after a few retries
      */
-    public void editPage(long pageId, String wikitext, String summary, List<String> tags) throws IOException, MediaWikiApiErrorException {
+    public long editPage(long pageId, String wikitext, String summary, List<String> tags) throws IOException, MediaWikiApiErrorException {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("action", "edit");
         parameters.put("tags", String.join("|", tags));
@@ -159,16 +281,32 @@ public class MediaFileUtils {
         parameters.put("bot", "true");
         parameters.put("token", getCsrfToken());
 
-        int retries = 3;
+        int retries = maxRetries;
+        long backOffTime = maxLagWaitTime;
         MediaWikiApiErrorException lastException = null;
         while (retries > 0) {
             try {
-                apiConnection.sendJsonRequest("POST", parameters);
-                return;
+                JsonNode response = apiConnection.sendJsonRequest("POST", parameters);
+                if (response.has("edit") && response.get("edit").has("newrevid")) {
+                    return response.get("edit").get("newrevid").asLong(0L);
+                } else {
+                    throw new IllegalStateException("Could not find the revision id in MediaWiki's response");
+                }
             } catch (MediaWikiApiErrorException e) {
                 lastException = e;
             }
             retries--;
+            if (retries > 0) {
+                try {
+                    logger.info(String.format("-- editPage:API error. %d attempts left. Pausing %d secs before retry.", retries,
+                            backOffTime / 1000));
+                    Thread.sleep(backOffTime);
+                } catch (InterruptedException e1) {
+                    Thread.currentThread().interrupt();
+                    retries = 0;
+                }
+                backOffTime *= (long) backoffFactor;
+            }
         }
         throw lastException;
     }
@@ -200,9 +338,11 @@ public class MediaFileUtils {
      * @throws IOException
      * @throws MediaWikiApiErrorException
      */
-    protected MediaUploadResponse uploadFile(Map<String, String> parameters, Map<String, ImmutablePair<String, java.io.File>> files)
+    protected MediaUploadResponse uploadFile(Map<String, String> parameters, Map<String, ImmutablePair<String, java.io.File>> files,
+            boolean newVersion)
             throws IOException, MediaWikiApiErrorException {
         int retries = 3;
+        long backOffTime = maxLagWaitTime;
         MediaWikiApiErrorException lastException = null;
         while (retries > 0) {
             try {
@@ -212,6 +352,16 @@ public class MediaFileUtils {
                     throw new IOException("The server did not return an 'upload' field in the JSON response.");
                 }
                 MediaUploadResponse response = ParsingUtilities.mapper.treeToValue(uploadNode, MediaUploadResponse.class);
+                if (response.hasAllowedWarnings() && newVersion) {
+                    logger.info("Ignoring warnings: " + response.warnings);
+                    Map<String, String> ignoreWarningsParameters = new HashMap<>();
+                    ignoreWarningsParameters.putAll(parameters);
+                    ignoreWarningsParameters.put("ignorewarnings", "1");
+                    ignoreWarningsParameters.remove("url");
+                    ignoreWarningsParameters.put("filekey", response.filekey);
+                    return uploadFile(ignoreWarningsParameters, null, newVersion);
+                }
+
                 // todo check for errors which should be retried
                 return response;
             } catch (TokenErrorException e) {
@@ -222,11 +372,12 @@ public class MediaFileUtils {
             } catch (MaxlagErrorException e) { // wait for 5 seconds
                 lastException = e;
                 try {
-                    Thread.sleep(maxLagWaitTime);
+                    Thread.sleep(backOffTime);
                 } catch (InterruptedException e1) {
                     Thread.currentThread().interrupt();
                     retries = 0;
                 }
+                backOffTime *= (long) backoffFactor;
             }
             retries--;
         }
@@ -259,6 +410,10 @@ public class MediaFileUtils {
         public String filename;
         @JsonProperty("pageid")
         public long pageid;
+        @JsonProperty("offset")
+        public long offset;
+        @JsonProperty("filekey")
+        public String filekey;
         @JsonProperty("warnings")
         public Map<String, JsonNode> warnings;
 
@@ -271,12 +426,17 @@ public class MediaFileUtils {
          * @throws MediaWikiApiErrorException
          */
         public void checkForErrors() throws MediaWikiApiErrorException {
+            if ("Continue".equals(result)) {
+                return;
+            }
+
             if (!"Success".equals(result)) {
                 throw new MediaWikiApiErrorException(result,
                         "The file upload action returned the '" + result + "' error code. Warnings are: " + Objects.toString(warnings));
             }
-            if (filename == null) {
-                throw new MediaWikiApiErrorException(result, "The MediaWiki API did not return any filename for the uploaded file");
+            if (filename == null && filekey == null) {
+                throw new MediaWikiApiErrorException(result,
+                        "The MediaWiki API did not return any filename or filekey for the uploaded file");
             }
         }
 
@@ -302,6 +462,101 @@ public class MediaFileUtils {
                 }
             }
             return mid;
+        }
+
+        /**
+         * Checks if warnings are allowed for the purpose of uploading a new version of the file. If there are any
+         * warnings they must all be allowed.
+         *
+         * @return
+         */
+        public boolean hasAllowedWarnings() {
+
+            if ("Success".equals(result)) {
+                return false;
+            }
+
+            if (warnings == null) {
+                return false;
+            }
+
+            Set<String> warningCodes = warnings.keySet();
+            Set<String> allowedWarnings = Set.of("exists", "duplicateversions");
+            return allowedWarnings.containsAll(warningCodes);
+        }
+    }
+
+    /**
+     * A file read one chunk at a time.
+     */
+
+    public static class ChunkedFile implements Closeable {
+
+        protected FileInputStream stream;
+        protected final int chunkSize = 10000000; // 10 MB
+        protected File path;
+        protected long bytesRead;
+        protected int chunksRead;
+
+        public ChunkedFile(File path) throws FileNotFoundException {
+            this.path = path;
+            stream = new FileInputStream(path);
+            bytesRead = 0;
+            chunksRead = 0;
+        }
+
+        /**
+         * Read the next chunk of the file.
+         *
+         * @return {File} Contains a chunk of the original file. The length in bytes is chunkSize or however much
+         *         remains of the file if the last chunk is read.
+         * @throws IOException
+         */
+        public File readChunk() throws IOException {
+            if (bytesRead >= path.length()) {
+                return null;
+            }
+
+            String fileName = "chunk-" + chunksRead + "-";
+            BoundedInputStream inStream = BoundedInputStream.builder()
+                    .setInputStream(stream)
+                    .setMaxCount(chunkSize)
+                    .get();
+            File chunk = Files.createTempFile(fileName, getExtension()).toFile();
+            OutputStream outStream = new FileOutputStream(chunk);
+            bytesRead += inStream.transferTo(outStream);
+            chunksRead++;
+
+            return chunk;
+        }
+
+        /**
+         * Get length of the file.
+         * 
+         * @see File#length() length
+         * @return {long}
+         */
+        public long getLength() {
+            return path.length();
+        }
+
+        /**
+         * Get the extension from the filename.
+         * 
+         * @return {String} The file extensions, including the dot. If the file has no extensions, the empty string.
+         */
+        public String getExtension() {
+            int lastDotIndex = path.getName().lastIndexOf(".");
+            if (lastDotIndex == -1) {
+                return "";
+            }
+
+            return path.getName().substring(lastDotIndex);
+        }
+
+        @Override
+        public void close() throws IOException {
+            stream.close();
         }
     }
 }

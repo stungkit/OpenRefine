@@ -40,6 +40,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import com.google.refine.commands.Command;
 import com.google.refine.expr.ExpressionUtils;
 import com.google.refine.history.Change;
@@ -154,6 +155,7 @@ public class ReconClearOneCellCommand extends Command {
             } else {
                 int newChange = 0;
                 int matchChange = 0;
+                int errorChange = 0;
 
                 if (oldJudgment == Judgment.New) {
                     newChange--;
@@ -161,11 +163,14 @@ public class ReconClearOneCellCommand extends Command {
                 if (oldJudgment == Judgment.Matched) {
                     matchChange--;
                 }
+                if (oldJudgment == Judgment.Error)
+                    errorChange--;
 
                 stats = new ReconStats(
                         stats.nonBlanks + 1,
                         stats.newTopics + newChange,
-                        stats.matchedTopics + matchChange);
+                        stats.matchedTopics + matchChange,
+                        stats.errorTopics + errorChange);
             }
 
             String description = "Clear recon data for single cell on row " + (rowIndex + 1) +

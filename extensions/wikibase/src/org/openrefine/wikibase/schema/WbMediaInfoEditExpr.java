@@ -5,6 +5,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.MediaInfoIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.StringValue;
+
 import org.openrefine.wikibase.qa.QAWarning;
 import org.openrefine.wikibase.qa.QAWarning.Severity;
 import org.openrefine.wikibase.schema.WbNameDescExpr.NameDescType;
@@ -17,12 +23,6 @@ import org.openrefine.wikibase.updates.MediaInfoEdit;
 import org.openrefine.wikibase.updates.MediaInfoEditBuilder;
 import org.openrefine.wikibase.updates.StatementEdit;
 import org.openrefine.wikibase.updates.StatementGroupEdit;
-import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.MediaInfoIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.StringValue;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * The representation of an item edit, which can contain variables both for its own id and in its contents.
@@ -121,7 +121,8 @@ public class WbMediaInfoEditExpr implements WbExpression<MediaInfoEdit> {
             warning.setProperty("example", subjectId.getId());
             throw new QAWarningException(warning);
         }
-        MediaInfoEditBuilder update = new MediaInfoEditBuilder(subjectId);
+        MediaInfoEditBuilder update = new MediaInfoEditBuilder(subjectId)
+                .addContributingRowId(ctxt.getRowId());
         for (WbStatementGroupExpr expr : getStatementGroups()) {
             try {
                 StatementGroupEdit statementGroupUpdate = expr.evaluate(ctxt, subjectId);

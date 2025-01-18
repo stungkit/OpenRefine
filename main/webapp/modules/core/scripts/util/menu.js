@@ -33,7 +33,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 MenuSystem = {
   _layers: [],
-  _overlay: null
+  _overlay: null,
+  _hoverTimeout: null
 };
 
 MenuSystem.showMenu = function(elmt, onDismiss) {
@@ -127,7 +128,7 @@ MenuSystem.createAndShowStandardMenu = function(items, elmt, options) {
   options = options || {
     horizontal: false
   };
-
+  
   var menu = MenuSystem.createMenu();
   if ("width" in options) {
     menu.width(options.width);
@@ -136,45 +137,41 @@ MenuSystem.createAndShowStandardMenu = function(items, elmt, options) {
   var createMenuItem = function(item) {
     if ("label" in item) {
       var menuItem = MenuSystem.createMenuItem().appendTo(menu);
+      $('<div></div>').text(item.label).appendTo(menuItem);
       if ("submenu" in item) {
-        menuItem.html(
-          '<table width="100%" cellspacing="0" cellpadding="0" class="menu-item-layout"><tr>' +
-          '<td>' + item.label + '</td>' +
-          '<td width="1%"><img src="images/right-arrow.png" /></td>' +
-          '</tr></table>'
-        );
-        menuItem.on('mouseenter',function() {
-          MenuSystem.dismissUntil(level);
+        menuItem.addClass('submenu');
+        menuItem.on('mouseenter click', function () {
+        clearTimeout(MenuSystem._hoverTimeout);
+        MenuSystem._hoverTimeout = setTimeout(function () {
+            MenuSystem.dismissUntil(level);
+            var options = {
+                horizontal: true
+            };
 
-          menuItem.addClass("menu-expanded");
-
-          var options = {
-            horizontal: true,
-            onDismiss: function() {
-              menuItem.removeClass("menu-expanded");
+            if ("width" in item) {
+                options.width = item.width;
             }
-          };
-          if ("width" in item) {
-            options.width = item.width;
-          }
-
-          MenuSystem.createAndShowStandardMenu(item.submenu, this, options);
+            MenuSystem.createAndShowStandardMenu(item.submenu, menuItem, options);
+        }, 300); 
         });
+
       } else {
         if ("download" in item) {
-          menuItem.html(item.label);
           menuItem.attr("href",item.download);
           menuItem.attr("download","");
         } else {
-          menuItem.html(item.label).on('click', function (evt) {
+          menuItem.on('click', function (evt) {
             item.click.call(this, evt);
             MenuSystem.dismissAll();
           });
           if ("tooltip" in item) {
             menuItem.attr("title", item.tooltip);
           }
-          menuItem.on('mouseenter', function () {
+          menuItem.on('mouseenter click', function () {
+            clearTimeout(MenuSystem._hoverTimeout);
+            MenuSystem._hoverTimeout = setTimeout(function () {
             MenuSystem.dismissUntil(level);
+            }, 300);
           });
         }
       }
@@ -195,6 +192,8 @@ MenuSystem.createAndShowStandardMenu = function(items, elmt, options) {
   } else {
     MenuSystem.positionMenuAboveBelow(menu, $(elmt));
   }
+
+  menu.find(".menu-item").first().trigger('focus');
 
   return level;
 };

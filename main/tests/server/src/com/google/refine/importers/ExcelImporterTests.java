@@ -36,7 +36,6 @@ package com.google.refine.importers;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -44,33 +43,39 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.DataFormat;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.LoggerFactory;
-import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.refine.model.Project;
 import com.google.refine.util.ParsingUtilities;
 
 public class ExcelImporterTests extends ImporterTest {
 
-    private static final double EPSILON = 0.0000001;
     private static final int SHEETS = 3;
     private static final int ROWS = 4;
-    private static final int COLUMNS = 13;
-
     private static final String DATE_TIME_FORMAT = "yyyy-MM-dd HH:mm";
     private static final String DATE_FORMAT = "yyyy-MM-dd";
     private static final String LEADING_ZERO_FORMAT = "0000";
@@ -83,13 +88,15 @@ public class ExcelImporterTests extends ImporterTest {
 
     private static final LocalDateTime NOW = LocalDateTime.now();
     private static final String NOW_STRING = NOW.format(DateTimeFormatter.ofPattern(DATE_TIME_FORMAT));
+    private static final OffsetDateTime EXPECTED_DATE_TIME = NOW.truncatedTo(ChronoUnit.MILLIS).atZone(ZoneId.systemDefault())
+            .toOffsetDateTime();
+    private static final String EXPECTED_DATE = NOW_STRING.substring(0, 10);
 
     private static final File xlsFile = createSpreadsheet(false, NOW);
     private static final File xlsxFile = createSpreadsheet(true, NOW);
 
     private static final File xlsFileWithMultiSheets = createSheetsWithDifferentColumns(false);
     private static final File xlsxFileWithMultiSheets = createSheetsWithDifferentColumns(true);
-    private static final NumberFormat NUMBER_FORMAT = DecimalFormat.getInstance();
 
     @Override
     @BeforeTest
@@ -131,43 +138,23 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = new FileInputStream(xlsFile);
 
-        try {
-            parseOneFile(SUT, stream);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, stream);
 
-        Assert.assertEquals(project.rows.size(), ROWS);
-        Assert.assertEquals(project.rows.get(1).cells.size(), COLUMNS);
-        Assert.assertEquals(((Number) project.rows.get(1).getCellValue(0)).doubleValue(), 1.1, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(2).getCellValue(0)).doubleValue(), 2.2, EPSILON);
-
-        Assert.assertFalse((Boolean) project.rows.get(1).getCellValue(1));
-        Assert.assertTrue((Boolean) project.rows.get(2).getCellValue(1));
-
-        // Skip col 2 where old Calendar test was
-        assertTrue(ParsingUtilities.isDate(project.rows.get(1).getCellValue(3)), "Cell value is not a date");
-
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(4), " Row 1 Col 5");
-        Assert.assertNull((String) project.rows.get(1).getCellValue(5));
-
-        assertEquals(project.rows.get(1).getCellValue(6), 1L);
-        assertEquals(project.rows.get(2).getCellValue(6), 2L);
-
-        assertEquals(project.rows.get(1).getCellValue(7), 1L);
-        assertEquals(project.rows.get(2).getCellValue(7), 2L);
-
-        assertEquals(project.rows.get(1).getCellValue(8), 1.0);
-        assertEquals(project.rows.get(2).getCellValue(8), 2.0);
-
-        assertEquals(project.rows.get(1).getCellValue(9), "0001");
-        assertEquals(project.rows.get(2).getCellValue(9), "0002");
-
-        assertEquals(project.rows.get(2).getCellValue(10), "(617) 235-1322");
-
-        assertEquals(project.rows.get(2).getCellValue(11), NOW_STRING.substring(0, 10));
-
-        assertEquals(project.rows.get(2).getCellValue(12), 1234.56);
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4), numberedColumn(5),
+                        numberedColumn(6), numberedColumn(7), numberedColumn(8), numberedColumn(9), numberedColumn(10), numberedColumn(11),
+                        numberedColumn(12), numberedColumn(13) },
+                new Serializable[][] {
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                });
+        assertProjectEquals(project, expectedProject);
 
         verify(options, times(1)).get("ignoreLines");
         verify(options, times(1)).get("headerLines");
@@ -192,44 +179,23 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = new FileInputStream(xlsxFile);
 
-        try {
-            parseOneFile(SUT, stream);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, stream);
 
-        Assert.assertEquals(project.rows.size(), ROWS);
-        Assert.assertEquals(project.rows.get(1).cells.size(), COLUMNS);
-        Assert.assertEquals(((Number) project.rows.get(1).getCellValue(0)).doubleValue(), 1.1, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(2).getCellValue(0)).doubleValue(), 2.2, EPSILON);
-
-        Assert.assertFalse((Boolean) project.rows.get(1).getCellValue(1));
-        Assert.assertTrue((Boolean) project.rows.get(2).getCellValue(1));
-
-        // Skip col 2 where old Calendar test was
-        assertTrue(ParsingUtilities.isDate(project.rows.get(1).getCellValue(3))); // Date
-        assertTrue(Duration.between(NOW, (OffsetDateTime) project.rows.get(1).getCellValue(3)).toMillis() < 1);
-
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(4), " Row 1 Col 5");
-        Assert.assertNull(project.rows.get(1).getCellValue(5));
-
-        assertEquals(project.rows.get(1).getCellValue(6), 1L);
-        assertEquals(project.rows.get(2).getCellValue(6), 2L);
-
-        assertEquals(project.rows.get(1).getCellValue(7), 1L);
-        assertEquals(project.rows.get(2).getCellValue(7), 2L);
-
-        assertEquals(project.rows.get(1).getCellValue(8), 1.0);
-        assertEquals(project.rows.get(2).getCellValue(8), 2.0);
-
-        assertEquals(project.rows.get(1).getCellValue(9), "0001");
-        assertEquals(project.rows.get(2).getCellValue(9), "0002");
-
-        assertEquals(project.rows.get(2).getCellValue(10), "(617) 235-1322");
-
-        assertEquals(project.rows.get(2).getCellValue(11), NOW_STRING.substring(0, 10)); // date only
-
-        assertEquals(project.rows.get(2).getCellValue(12), 1234.56);
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4), numberedColumn(5),
+                        numberedColumn(6), numberedColumn(7), numberedColumn(8), numberedColumn(9), numberedColumn(10), numberedColumn(11),
+                        numberedColumn(12), numberedColumn(13) },
+                new Serializable[][] {
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56 },
+                });
+        assertProjectEquals(project, expectedProject);
 
         verify(options, times(1)).get("ignoreLines");
         verify(options, times(1)).get("headerLines");
@@ -255,43 +221,30 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = new FileInputStream(xlsxFile);
 
-        try {
-            parseOneFile(SUT, stream);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, stream);
 
-        Assert.assertEquals(project.rows.size(), ROWS);
-        Assert.assertEquals(project.rows.get(1).cells.size(), COLUMNS);
-        Assert.assertEquals(((String) project.rows.get(1).getCellValue(0)), NUMBER_FORMAT.format(1.1));
-        Assert.assertEquals(((String) project.rows.get(2).getCellValue(0)), NUMBER_FORMAT.format(2.2));
+        final DecimalFormat decimalFormat = (DecimalFormat) NumberFormat.getNumberInstance(Locale.getDefault());
+        decimalFormat.applyPattern("0.00");
+        final NumberFormat numberFormat = DecimalFormat.getInstance(Locale.getDefault());
+        String expectedCurrency = "$" + numberFormat.format(1234.56);
+        // TODO this currently renders ",00" in a French locale, which is a bug: it should be "0,00"
+        String expectedBuggyCell = (String) project.rows.get(0).cells.get(8).value;
 
-        assertEquals((String) project.rows.get(1).getCellValue(1), "FALSE");
-        assertEquals((String) project.rows.get(2).getCellValue(1), "TRUE");
-
-        // Skip col 2 where old Calendar test was
-        assertEquals((String) project.rows.get(1).getCellValue(3), NOW_STRING); // Date
-
-        assertEquals((String) project.rows.get(1).getCellValue(4), " Row 1 Col 5");
-        assertEquals((String) project.rows.get(1).getCellValue(5), "");
-
-        assertEquals((String) project.rows.get(1).getCellValue(6), "1");
-        assertEquals((String) project.rows.get(2).getCellValue(6), "2");
-
-        assertEquals(project.rows.get(1).getCellValue(7), "1");
-        assertEquals(project.rows.get(2).getCellValue(7), "2");
-
-        assertEquals(project.rows.get(1).getCellValue(8), "100.00%");
-        assertEquals(project.rows.get(2).getCellValue(8), "200.00%");
-
-        assertEquals(project.rows.get(1).getCellValue(9), "0001");
-        assertEquals(project.rows.get(2).getCellValue(9), "0002");
-
-        assertEquals(project.rows.get(ROWS - 1).getCellValue(10), "(617) 235-1322");
-
-        assertEquals(project.rows.get(ROWS - 1).getCellValue(11), NOW_STRING.substring(0, 10)); // date only
-
-        assertEquals(project.rows.get(ROWS - 1).getCellValue(12), "$1,234.56");
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4), numberedColumn(5),
+                        numberedColumn(6), numberedColumn(7), numberedColumn(8), numberedColumn(9), numberedColumn(10), numberedColumn(11),
+                        numberedColumn(12), numberedColumn(13) },
+                new Serializable[][] {
+                        { numberFormat.format(0.0), "TRUE", null, NOW_STRING, " Row 0 Col 5", "", "0", "0", expectedBuggyCell, "0000",
+                                "(617) 235-1322", EXPECTED_DATE, expectedCurrency },
+                        { numberFormat.format(1.1), "FALSE", null, NOW_STRING, " Row 1 Col 5", "", "1", "1",
+                                decimalFormat.format(100.0) + "%", "0001", "(617) 235-1322", EXPECTED_DATE, expectedCurrency },
+                        { numberFormat.format(2.2), "TRUE", null, NOW_STRING, " Row 2 Col 5", "", "2", "2",
+                                decimalFormat.format(200.0) + "%", "0002", "(617) 235-1322", EXPECTED_DATE, expectedCurrency },
+                        { numberFormat.format(3.3), "FALSE", null, NOW_STRING, " Row 3 Col 5", "", "3", "3",
+                                decimalFormat.format(300.0) + "%", "0003", "(617) 235-1322", EXPECTED_DATE, expectedCurrency },
+                });
+        assertProjectEquals(project, expectedProject);
 
         verify(options, times(1)).get("ignoreLines");
         verify(options, times(1)).get("headerLines");
@@ -305,12 +258,8 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = ClassLoader.getSystemResourceAsStream("excel95.xls");
 
-        try {
-            // We don't support Excel 95, but make sure we get an exception back
-            Assert.assertEquals(parseOneFileAndReturnExceptions(SUT, stream).size(), 1);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        // We don't support Excel 95, but make sure we get an exception back
+        assertEquals(parseOneFileAndReturnExceptions(SUT, stream).size(), 1);
     }
 
     @Test
@@ -330,12 +279,20 @@ public class ExcelImporterTests extends ImporterTest {
 
         parseOneFile(SUT, stream);
 
-        // The original value reads 2021-04-18 in the Excel file.
-        // We make sure it is not shifted by a day because of timezone handling
-        assertEquals(project.rows.get(0).getCellValue(0), "2021-04-18");
-        // Same, with 2021-01-01 (in winter / no DST)
-        assertEquals(project.rows.get(1).getCellValue(0), "2021-01-01");
-
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4) },
+                new Serializable[][] {
+                        // The original value reads 2021-04-18 in the Excel file.
+                        // We make sure it is not shifted by a day because of timezone handling
+                        { "2021-04-18", null, null, null },
+                        // Same, with 2021-01-01 (in winter / no DST)
+                        { "2021-01-01", null, null, null },
+                        // TODO those null rows should probably not be created (and similarly for the null columns)?
+                        { null, null, null, null },
+                        { null, null, null, null },
+                        { null, null, null, null },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
@@ -358,31 +315,39 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = new FileInputStream(xlsFileWithMultiSheets);
 
-        try {
-            parseOneFile(SUT, stream);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, stream);
 
-        Assert.assertEquals(project.rows.size(), ROWS * SHEETS);
-        Assert.assertEquals(project.rows.get(1).cells.size(), COLUMNS);
-        Assert.assertEquals(project.columnModel.columns.size(), COLUMNS + SHEETS - 1);
-
-        Assert.assertEquals(((Number) project.rows.get(1).getCellValue(0)).doubleValue(), 1.1, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(2).getCellValue(0)).doubleValue(), 2.2, EPSILON);
-        // Check the value read from the second sheet.
-        Assert.assertEquals(((Number) project.rows.get(ROWS).getCellValue(0)).doubleValue(), 0.0, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(ROWS).getCellValue(COLUMNS)).doubleValue(), 1.0, EPSILON);
-
-        Assert.assertFalse((Boolean) project.rows.get(1).getCellValue(1));
-        Assert.assertTrue((Boolean) project.rows.get(2).getCellValue(1));
-
-        // Skip col 2 where old Calendar test was
-        assertTrue(ParsingUtilities.isDate(project.rows.get(1).getCellValue(3)), "Cell value is not a date"); // Date
-        assertTrue(Duration.between(NOW, (OffsetDateTime) project.rows.get(1).getCellValue(3)).toMillis() < 1);
-
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(4), " Row 1 Col 5");
-        Assert.assertNull((String) project.rows.get(1).getCellValue(5));
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4), numberedColumn(5),
+                        numberedColumn(6), numberedColumn(7), numberedColumn(8), numberedColumn(9), numberedColumn(10), numberedColumn(11),
+                        numberedColumn(12), numberedColumn(13), numberedColumn(14), numberedColumn(15) },
+                new Serializable[][] {
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                });
+        assertProjectEquals(project, expectedProject);
 
         // We will read SHEETS sheets from created xls file.
         verify(options, times(SHEETS)).get("ignoreLines");
@@ -412,31 +377,39 @@ public class ExcelImporterTests extends ImporterTest {
 
         InputStream stream = new FileInputStream(xlsxFileWithMultiSheets);
 
-        try {
-            parseOneFile(SUT, stream);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-        }
+        parseOneFile(SUT, stream);
 
-        Assert.assertEquals(project.rows.size(), ROWS * SHEETS);
-        Assert.assertEquals(project.rows.get(1).cells.size(), COLUMNS);
-        Assert.assertEquals(project.columnModel.columns.size(), COLUMNS + SHEETS - 1);
-
-        Assert.assertEquals(((Number) project.rows.get(1).getCellValue(0)).doubleValue(), 1.1, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(2).getCellValue(0)).doubleValue(), 2.2, EPSILON);
-        // Check the value read from the second sheet.
-        Assert.assertEquals(((Number) project.rows.get(ROWS).getCellValue(0)).doubleValue(), 0.0, EPSILON);
-        Assert.assertEquals(((Number) project.rows.get(ROWS).getCellValue(COLUMNS)).doubleValue(), 1.0, EPSILON);
-
-        Assert.assertFalse((Boolean) project.rows.get(1).getCellValue(1));
-        Assert.assertTrue((Boolean) project.rows.get(2).getCellValue(1));
-
-        // Skip col 2 where old Calendar test was
-        assertTrue(ParsingUtilities.isDate(project.rows.get(1).getCellValue(3)), "Cell value is not a date"); // Date
-        assertTrue(Duration.between(NOW, (OffsetDateTime) project.rows.get(1).getCellValue(3)).toMillis() < 1);
-
-        Assert.assertEquals((String) project.rows.get(1).getCellValue(4), " Row 1 Col 5");
-        Assert.assertNull((String) project.rows.get(1).getCellValue(5));
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3), numberedColumn(4), numberedColumn(5),
+                        numberedColumn(6), numberedColumn(7), numberedColumn(8), numberedColumn(9), numberedColumn(10), numberedColumn(11),
+                        numberedColumn(12), numberedColumn(13), numberedColumn(14), numberedColumn(15) },
+                new Serializable[][] {
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, null, null },
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 1L, null },
+                        { 0L, true, null, EXPECTED_DATE_TIME, " Row 0 Col 5", null, 0L, 0L, 0.0, "0000", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 1.1, false, null, EXPECTED_DATE_TIME, " Row 1 Col 5", null, 1L, 1L, 1.0, "0001", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 2.2, true, null, EXPECTED_DATE_TIME, " Row 2 Col 5", null, 2L, 2L, 2.0, "0002", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                        { 3.3, false, null, EXPECTED_DATE_TIME, " Row 3 Col 5", null, 3L, 3L, 3.0, "0003", "(617) 235-1322", EXPECTED_DATE,
+                                1234.56, 2L, 3L },
+                });
+        assertProjectEquals(project, expectedProject);
 
         // We will read SHEETS sheets from created xls file.
         verify(options, times(SHEETS)).get("ignoreLines");
@@ -444,6 +417,40 @@ public class ExcelImporterTests extends ImporterTest {
         verify(options, times(SHEETS)).get("skipDataLines");
         verify(options, times(SHEETS)).get("limit");
         verify(options, times(SHEETS)).get("storeBlankCellsAsNulls");
+    }
+
+    @Test
+    public void testDeleteEmptyColumns() throws Exception {
+        ArrayNode sheets = ParsingUtilities.mapper.createArrayNode();
+        sheets.add(ParsingUtilities.mapper
+                .readTree("{name: \"file-source#Test Sheet 0\", fileNameAndSheetIndex: \"file-source#0\", rows: 31, selected: true}"));
+
+        whenGetArrayOption("sheets", options, sheets);
+        whenGetIntegerOption("ignoreLines", options, 0);
+        whenGetIntegerOption("headerLines", options, 0);
+        whenGetIntegerOption("skipDataLines", options, 1);
+        whenGetIntegerOption("limit", options, -1);
+
+        // This will mock the situation of deleting empty columns(col6)
+        whenGetBooleanOption("storeBlankCellsAsNulls", options, false);
+        whenGetBooleanOption("storeBlankColumns", options, false);
+
+        InputStream stream = new FileInputStream(xlsxFile);
+        parseOneFile(SUT, stream);
+
+        // We should have one less than the start due to empty column being skipped
+        assertEquals(project.columnModel.columns.size(), 12);
+        // NOTE: we need to redirect through the column model because the rows will still have empty cells
+        assertEquals(project.rows.get(1).getCellValue(project.columnModel.columns.get(1).getCellIndex()), true);
+        assertEquals(project.rows.get(1).getCellValue(project.columnModel.columns.get(2).getCellIndex()), EXPECTED_DATE_TIME);
+
+        verify(options, times(1)).get("ignoreLines");
+        verify(options, times(1)).get("headerLines");
+        verify(options, times(1)).get("skipDataLines");
+        verify(options, times(1)).get("limit");
+        verify(options, times(1)).get("storeBlankCellsAsNulls");
+        verify(options, times(1)).get("storeBlankColumns");
+
     }
 
     private static File createSpreadsheet(boolean xml, LocalDateTime date) {
@@ -489,7 +496,7 @@ public class ExcelImporterTests extends ImporterTest {
             outputStream.close();
             wb.close();
         } catch (IOException e) {
-            return null;
+            throw new UncheckedIOException(e);
         }
         return file;
     }
@@ -537,7 +544,7 @@ public class ExcelImporterTests extends ImporterTest {
             outputStream.close();
             wb.close();
         } catch (IOException e) {
-            return null;
+            throw new UncheckedIOException(e);
         }
         return file;
     }

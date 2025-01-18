@@ -33,16 +33,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.google.refine.importers;
 
+import java.io.Serializable;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -50,13 +47,8 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
+import com.google.refine.model.Project;
 import com.google.refine.model.Recon;
-import com.google.refine.model.ReconCandidate;
-import com.google.refine.model.recon.ReconJob;
-import com.google.refine.model.recon.StandardReconConfig;
-
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
 
 public class WikitextImporterTests extends ImporterTest {
 
@@ -94,18 +86,17 @@ public class WikitextImporterTests extends ImporterTest {
                 + "| d || e || f<br>\n"
                 + "|-\n"
                 + "|}\n";
-        try {
-            prepareOptions(0, 0, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 3);
-        Assert.assertEquals(project.rows.size(), 2);
-        Assert.assertEquals(project.rows.get(0).cells.size(), 3);
-        Assert.assertEquals(project.rows.get(0).cells.get(0).value, "a");
-        Assert.assertEquals(project.rows.get(0).cells.get(1).value, "b\n2");
-        Assert.assertEquals(project.rows.get(1).cells.get(2).value, "f");
+
+        prepareOptions(0, 0, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3) },
+                new Serializable[][] {
+                        { "a", "b\n2", "c" },
+                        { "d", "e", "f" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     /**
@@ -123,17 +114,17 @@ public class WikitextImporterTests extends ImporterTest {
                 + "| f<br>\n"
                 + "|-\n"
                 + "|}\n";
-        try {
-            prepareOptions(0, 0, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 3);
-        Assert.assertEquals(project.rows.size(), 2);
-        Assert.assertEquals(project.rows.get(0).cells.size(), 3);
-        Assert.assertEquals(project.rows.get(1).cells.get(1).value, "e");
-        Assert.assertEquals(project.rows.get(1).cells.get(2).value, "f");
+
+        prepareOptions(0, 0, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3) },
+                new Serializable[][] {
+                        { "a", "b\n2", "c" },
+                        { "d", "e", "f" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     public void readTableWithLinks() throws Exception {
@@ -158,12 +149,9 @@ public class WikitextImporterTests extends ImporterTest {
                     + "\"q2\":[{\"id\":\"Q1377256\",\"name\":\"European Monitoring Centre for Drugs and Drug Addiction\"}]}";
             server.enqueue(new MockResponse().setBody(jsonResponse));
 
-            try {
-                prepareOptions(0, 0, true, true, "https://de.wikipedia.org/wiki/", server.url("endpoint").url().toString());
-                parse(input);
-            } catch (Exception e) {
-                Assert.fail("Parsing failed", e);
-            }
+            prepareOptions(0, 0, true, true, "https://de.wikipedia.org/wiki/", server.url("endpoint").url().toString());
+            parse(input);
+
             Assert.assertEquals(project.columnModel.columns.size(), 3);
             Assert.assertEquals(project.rows.size(), 3);
             Assert.assertEquals(project.rows.get(0).cells.size(), 3);
@@ -205,19 +193,20 @@ public class WikitextImporterTests extends ImporterTest {
                 + "|-\n"
                 + "|}\n";
 
-        try {
-            prepareOptions(-1, 1, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 7);
-        Assert.assertEquals(project.rows.get(0).cells.get(0).value, "Europäisches Zentrum für die Förderung der Berufsbildung");
-        Assert.assertEquals(project.rows.get(0).cells.get(1).value, "Cedefop");
-        Assert.assertEquals(project.rows.get(1).cells.get(1).value, "EUROFOUND");
-        Assert.assertEquals(project.columnModel.columns.get(0).getName(), "Offizieller Name");
-        Assert.assertEquals(project.columnModel.columns.get(6).getName(), "Anmerkungen");
-        Assert.assertEquals(project.rows.get(0).cells.size(), 7);
+        prepareOptions(-1, 1, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { "Offizieller Name", "Abkürzung", "Website", "Standort", "Staat", "Gründung", "Anmerkungen" },
+                new Serializable[][] {
+                        { "Europäisches Zentrum für die Förderung der Berufsbildung", "Cedefop", "http://www.cedefop.europa.eu/",
+                                "Thessaloniki", "{{Griechenland}}", "1975", "" },
+                        { "Europäische Stiftung zur Verbesserung der Lebens- und Arbeitsbedingungen", "EUROFOUND",
+                                "http://www.eurofound.europa.eu/", "Dublin", "{{Irland}}", "1975", "" },
+                        { "Europäische Beobachtungsstelle für Drogen und Drogensucht", "EMCDDA", "http://www.emcdda.europa.eu/", "Lissabon",
+                                "{{Portugal}}", "1993", "" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
@@ -238,16 +227,16 @@ public class WikitextImporterTests extends ImporterTest {
                 + "|Yogurt\n"
                 + "|}\n";
 
-        try {
-            prepareOptions(-1, 1, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 6);
-        Assert.assertNull(project.rows.get(1).cells.get(2));
-        Assert.assertNull(project.rows.get(1).cells.get(3));
-        Assert.assertEquals(project.rows.get(1).cells.get(4).value, "Butter");
+        prepareOptions(-1, 1, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { "Shopping List", "Column", "Column2", "Column3", "Column4", "Column5" },
+                new Serializable[][] {
+                        { "Bread & Butter", "Pie", "Buns", "Danish", "Croissant", null },
+                        { "Cheese", "Ice cream", null, null, "Butter", "Yogurt" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
@@ -264,18 +253,16 @@ public class WikitextImporterTests extends ImporterTest {
                 + "|-\n"
                 + "|}\n";
 
-        try {
-            prepareOptions(-1, 1, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 5);
-        Assert.assertEquals(project.rows.get(0).cells.get(1).value, "b");
-        Assert.assertEquals(project.rows.get(0).cells.get(2).value, "http://gnu.org");
-        Assert.assertEquals(project.rows.get(0).cells.get(4).value, "http://microsoft.com/");
-        Assert.assertEquals(project.rows.get(1).cells.get(4).value, "http://gnu.org");
-        Assert.assertEquals(project.rows.get(1).cells.get(2).value, "http://microsoft.com/");
+        prepareOptions(-1, 1, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { "price", "fruit", "Column", "merchant", "Column2" },
+                new Serializable[][] {
+                        { "a", "b", "http://gnu.org", "c", "http://microsoft.com/" },
+                        { "d", "e", "http://microsoft.com/", "f", "http://gnu.org" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     @Test
@@ -292,18 +279,16 @@ public class WikitextImporterTests extends ImporterTest {
                 + "|-\n"
                 + "|}\n";
 
-        try {
-            prepareOptions(-1, 1, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 5);
-        Assert.assertEquals(project.rows.get(0).cells.get(1).value, "b");
-        Assert.assertEquals(project.rows.get(0).cells.get(2).value, "http://gnu.org");
-        Assert.assertEquals(project.rows.get(0).cells.get(4).value, "http://microsoft.com/");
-        Assert.assertEquals(project.rows.get(1).cells.get(4).value, "http://gnu.org");
-        Assert.assertEquals(project.rows.get(1).cells.get(2).value, "http://microsoft.com/");
+        prepareOptions(-1, 1, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { "price", "fruit", "Column", "merchant", "Column2" },
+                new Serializable[][] {
+                        { "a", "b", "http://gnu.org", "c", "http://microsoft.com/" },
+                        { "d", "e", "http://microsoft.com/", "f", "http://gnu.org" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     /**
@@ -321,17 +306,17 @@ public class WikitextImporterTests extends ImporterTest {
                 + "| f<br>\n"
                 + "|-\n"
                 + "|}\n";
-        try {
-            prepareOptions(0, 0, true, true, null, null);
-            parse(input);
-        } catch (Exception e) {
-            Assert.fail("Parsing failed", e);
-        }
-        Assert.assertEquals(project.columnModel.columns.size(), 3);
-        Assert.assertEquals(project.rows.size(), 2);
-        Assert.assertEquals(project.rows.get(0).cells.size(), 3);
-        Assert.assertEquals(project.rows.get(0).cells.get(0).value, "{{free to read}}");
-        Assert.assertEquals(project.rows.get(1).cells.get(1).value, "[[File:My logo.svg]]");
+
+        prepareOptions(0, 0, true, true, null, null);
+        parse(input);
+
+        Project expectedProject = createProject(
+                new String[] { numberedColumn(1), numberedColumn(2), numberedColumn(3) },
+                new Serializable[][] {
+                        { "{{free to read}}", "b", "c" },
+                        { "d", "[[File:My logo.svg]]", "f" },
+                });
+        assertProjectEquals(project, expectedProject);
     }
 
     // --helpers--

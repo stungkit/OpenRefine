@@ -35,10 +35,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   padding: 0;
 }
 
+.ui-tabs .ui-tabs-nav li.ui-tabs-active .ui-tabs-anchor,
+.ui-tabs .ui-tabs-nav li.ui-state-disabled .ui-tabs-anchor,
+.ui-tabs .ui-tabs-nav li.ui-tabs-loading .ui-tabs-anchor {
+	cursor: default;
+}
+
 .ui-widget-content, .ui-tabs .ui-widget-header {
   border: none;
   background: none;
   color: inherit;
+}
+
+.ui-tabs-tab:focus {
+  outline: #86A8DF auto 5px; /* color of native browser outlines */
 }
 
 .ui-tabs .ui-tabs-nav {
@@ -79,6 +89,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   border-bottom: none;
   background: var(--background-primary);
 }
+
 
 .ui-tabs .ui-tabs-nav .ui-state-active a,
 .ui-tabs .ui-tabs-nav .ui-state-active a:link,

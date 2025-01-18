@@ -1,18 +1,19 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.QAWarning;
-import org.openrefine.wikibase.updates.LabeledStatementEntityEdit;
+import java.util.Set;
+
 import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
 
-import java.util.Set;
+import org.openrefine.wikibase.qa.QAWarning;
+import org.openrefine.wikibase.updates.LabeledStatementEntityEdit;
 
 /**
  * @author Lu Liu
  */
 public class CommonDescriptionScrutinizer extends DescriptionScrutinizer {
 
-    public static final String descTooLongType = "description-too-long";
+    public static final String descTooLongType = "item-description-too-long";
     public static final String descIdenticalWithLabel = "description-identical-with-label";
 
     @Override

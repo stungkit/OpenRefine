@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
-  var doTextTransform = function(expression, onError, repeat, repeatCount) {
+  var doTextTransform = function(expression, onError, repeat, repeatCount, onDone) {
     Refine.postCoreProcess(
       "text-transform",
       {
@@ -42,7 +42,8 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         repeatCount: repeatCount
       },
       { expression: expression },
-      { cellsChanged: true }
+      { cellsChanged: true },
+      { onDone },
     );
   };
 
@@ -72,9 +73,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         previewWidget.getExpression(true),
         $('input[name="text-transform-dialog-onerror-choice"]:checked')[0].value,
         elmts.repeatCheckbox[0].checked,
-        elmts.repeatCountInput[0].value
+        elmts.repeatCountInput[0].value,
+        dismiss
       );
-      dismiss();
     });
 
     var o = DataTableView.sampleVisibleRows(column);
@@ -101,7 +102,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         columnName: column.name
       },
       null,
-      { modelsChanged: true }
+      { modelsChanged: true, rowIdsPreserved: true }
     );
   };
 
@@ -112,7 +113,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         columnName: column.name
       },
       null,
-      { modelsChanged: true }
+      { modelsChanged: true, rowIdsPreserved: true }
     );
   };
 
@@ -229,6 +230,8 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
       // replace "\newline" with "\n" and "\tab" with "\t"
       temp = temp.replace(/\\\n/g, '\\n').replace(/\\\t/g, '\\t');
     }
+    // replace """" with "\""
+    temp = temp.replace(/"/g, '\\"');
     // replace newline with "\n" and tab with "\t"
     return temp.replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/[\x00-\x1F\x80-\x9F]/g,'');
   }
@@ -283,8 +286,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         text_to_find = '"'+text_to_find+'"';
       }
       expression = 'value.replace('+text_to_find+',"'+replacement_text+'")';
-      doTextTransform(expression, "keep-original", false, "");
-      dismiss();
+      doTextTransform(expression, "keep-original", false, "", dismiss);
     });
   };
 
@@ -362,14 +364,14 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
           return;
         }
       } else if (mode === "cases") {
-        if(elmts.reversTranistionCases[0].checked) {
+        if(elmts.reverseTransitionCases[0].checked) {
           config.separator = "(?<=\\p{Upper}|[\\p{Upper}][\\s])(?=\\p{Lower})";
         } else {
           config.separator = "(?<=\\p{Lower}|[\\p{Lower}][\\s])(?=\\p{Upper})";
         }
         config.regex = true;
       } else if (mode === "number") {
-        if(elmts.reversTranistionNumbers[0].checked) {
+        if(elmts.reverseTransitionNumbers[0].checked) {
           config.separator = "(?<=\\p{L}|[\\p{L}][\\s])(?=\\p{Digit})";
         } else {
           config.separator = "(?<=\\p{Digit}|[\\p{Digit}][\\s])(?=\\p{L})";
@@ -381,10 +383,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         "split-multi-value-cells",
         config,
         null,
-        { rowsChanged: true }
+        { rowsChanged: true },
+        { onDone: dismiss }
       );
-
-      dismiss();
     });
   };
 
@@ -504,7 +505,7 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
     {
       id: "core/cluster",
       label: $.i18n('core-views/cluster-edit'),
-      click: function() { new ClusteringDialog(column.name, "value"); }
+      click: function() { new ClusteringDialog(column, "value"); }
     },
     {},
     {
@@ -699,9 +700,9 @@ DataTableColumnHeaderUI.extendMenu(function(column, columnHeaderUI, menu) {
         "key-value-columnize",
         config,
         null,
-        { modelsChanged: true }
+        { modelsChanged: true },
+        { onDone: dismiss }
       );
-      dismiss();
     });
 
     var valueColumnIndex = -1;

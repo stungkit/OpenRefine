@@ -33,22 +33,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.google.refine.exporters;
 
-import java.io.ByteArrayInputStream;
-
-import org.apache.poi.ss.SpreadsheetVersion;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFCell;
-
 import static org.mockito.Mockito.mock;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.util.Properties;
 
+import org.apache.poi.ss.SpreadsheetVersion;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -122,14 +120,10 @@ public class XlsxExporterTests extends RefineTest {
     }
 
     @Test
-    public void exportSimpleXlsx() {
+    public void exportSimpleXlsx() throws IOException {
         CreateGrid(2, 2);
 
-        try {
-            SUT.export(project, options, engine, stream);
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        SUT.export(project, options, engine, stream);
 
         ByteArrayInputStream inStream = new ByteArrayInputStream(stream.toByteArray());
         try {
@@ -149,11 +143,7 @@ public class XlsxExporterTests extends RefineTest {
         OffsetDateTime odt = OffsetDateTime.parse("2019-04-09T12:00+00:00");
         createDateGrid(2, 2, odt);
 
-        try {
-            SUT.export(project, options, engine, stream);
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        SUT.export(project, options, engine, stream);
 
         ByteArrayInputStream inStream = new ByteArrayInputStream(stream.toByteArray());
         try {
@@ -173,11 +163,7 @@ public class XlsxExporterTests extends RefineTest {
         String url = "GET /primo-library/,http:%2F%2Fcatalogue.unice.fr HTTP/1.1";
         createDateGrid(2, 2, url);
 
-        try {
-            SUT.export(project, options, engine, stream);
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        SUT.export(project, options, engine, stream);
 
         ByteArrayInputStream inStream = new ByteArrayInputStream(stream.toByteArray());
         try {
@@ -196,11 +182,7 @@ public class XlsxExporterTests extends RefineTest {
     public void test257Columns() throws IOException {
         CreateGrid(2, 257);
 
-        try {
-            SUT.export(project, options, engine, stream);
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        SUT.export(project, options, engine, stream);
 
         try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(stream.toByteArray()))) {
             org.apache.poi.ss.usermodel.Sheet ws = wb.getSheetAt(0);
@@ -214,11 +196,7 @@ public class XlsxExporterTests extends RefineTest {
     public void test10000Columns() throws IOException {
         CreateGrid(2, 10000);
 
-        try {
-            SUT.export(project, options, engine, stream);
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        SUT.export(project, options, engine, stream);
 
         try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(stream.toByteArray()))) {
             org.apache.poi.ss.usermodel.Sheet ws = wb.getSheetAt(0);

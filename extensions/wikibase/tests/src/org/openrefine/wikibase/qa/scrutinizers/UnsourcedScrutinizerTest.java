@@ -24,10 +24,14 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.ConstraintFetcher;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.List;
+
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.implementation.StatementImpl;
@@ -37,13 +41,10 @@ import org.wikidata.wdtk.datamodel.interfaces.Snak;
 import org.wikidata.wdtk.datamodel.interfaces.SnakGroup;
 import org.wikidata.wdtk.datamodel.interfaces.Statement;
 
-import java.util.Collections;
-import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.openrefine.wikibase.qa.ConstraintFetcher;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public class UnsourcedScrutinizerTest extends StatementScrutinizerTest {
 
@@ -73,7 +74,8 @@ public class UnsourcedScrutinizerTest extends StatementScrutinizerTest {
         ItemIdValue id = TestingData.existingId;
         Snak mainSnak = Datamodel.makeSomeValueSnak(propertyIdValue);
         Statement statement = new StatementImpl("P172", mainSnak, id);
-        TermedStatementEntityEdit update = new ItemEditBuilder(id).addStatement(add(statement)).build();
+        TermedStatementEntityEdit update = new ItemEditBuilder(id).addStatement(add(statement)).addContributingRowId(123)
+                .addContributingRowId(123).build();
 
         List<Statement> constraintDefinitions = constraintParameterStatementList(entityIdValue, Collections.emptyList());
         ConstraintFetcher fetcher = mock(ConstraintFetcher.class);
@@ -91,7 +93,7 @@ public class UnsourcedScrutinizerTest extends StatementScrutinizerTest {
         List<SnakGroup> constraintQualifiers = makeSnakGroupList(referenceSnak);
         List<Statement> itemStatementList = constraintParameterStatementList(entityIdValue, constraintQualifiers);
         Statement statement = itemStatementList.get(0);
-        TermedStatementEntityEdit update = new ItemEditBuilder(id).addStatement(add(statement)).build();
+        TermedStatementEntityEdit update = new ItemEditBuilder(id).addStatement(add(statement)).addContributingRowId(123).build();
 
         List<Statement> constraintDefinitions = constraintParameterStatementList(entityIdValue, Collections.emptyList());
         ConstraintFetcher fetcher = mock(ConstraintFetcher.class);

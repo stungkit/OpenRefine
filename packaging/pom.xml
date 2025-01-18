@@ -10,7 +10,7 @@
   <parent>
     <groupId>org.openrefine</groupId>
     <artifactId>openrefine</artifactId>
-    <version>3.8-SNAPSHOT</version>
+    <version>3.10-SNAPSHOT</version>
   </parent>
   <properties>
     <rootdir>${basedir}/..</rootdir>
@@ -26,7 +26,7 @@
     <mac.dmg.path>${project.build.directory}/${project.build.finalName}-mac-${project.version}.dmg</mac.dmg.path>
     <mac.signing.identity>Code for Science and Society, Inc.</mac.signing.identity>
     <!-- Apple Notarization settings -->
-    <apple.notarization.timeout>10m</apple.notarization.timeout>
+    <apple.notarization.timeout>15m</apple.notarization.timeout>
 
     <windows.jre.path>${project.build.directory}/windows_jre</windows.jre.path>
     <windows.jre.url>https://api.adoptium.net/v3/binary/latest/${embedded.jre.version}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk</windows.jre.url>
@@ -55,7 +55,6 @@
                 <configuration>
                   <descriptors>
                     <descriptor>linux.xml</descriptor>
-                    <descriptor>windows-without-jre.xml</descriptor>
                     <descriptor>windows-with-jre.xml</descriptor>
                   </descriptors>
                   <attach>false</attach>
@@ -123,6 +122,13 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>license-maven-plugin</artifactId>
         <version>${license-plugin.version}</version>
+        <configuration>
+          <socketTimeout>10000</socketTimeout>
+          <connectTimeout>10000</connectTimeout>
+          <cleanLicensesOutputDirectory>true</cleanLicensesOutputDirectory>
+          <licensesConfigFile>${basedir}/manual_licenses.xml</licensesConfigFile>
+          <excludedArtifacts>oro</excludedArtifacts>  
+        </configuration>
         <executions>
           <execution>
             <phase>generate-test-resources</phase>
@@ -421,68 +427,8 @@
       <plugin>
         <groupId>com.akathist.maven.plugins.launch4j</groupId>
         <artifactId>launch4j-maven-plugin</artifactId>
-        <version>2.1.3</version>
-
-            <!-- This is a clean snapshot of launch4j's master branch,
-                which includes fixes to Java discovery that we need
-                to support recent versions of Java.
-                When the maven plugin is updated to use launch4j-3.13,
-                this can be removed. -->
-        <dependencies>
-          <dependency>
-            <groupId>net.sf.launch4j</groupId>
-            <artifactId>launch4j</artifactId>
-            <classifier>core</classifier>
-            <version>3.14</version>
-          </dependency>
-          <dependency>
-            <groupId>com.thoughtworks.xstream</groupId>
-            <artifactId>xstream</artifactId>
-          <version>1.4.19</version>
-        </dependency>
-        </dependencies>
+        <version>2.5.2</version>
         <executions>
-          <execution>
-            <id>l4j-clui-without-jre</id>
-            <phase>package</phase>
-            <goals><goal>launch4j</goal></goals>
-            <configuration>
-              <headerType>console</headerType>
-              <outfile>target/openrefine_without_jre.exe</outfile>
-              <jar>server/target/lib/openrefine-${project.version}-server.jar</jar>
-              <dontWrapJar>true</dontWrapJar>
-              <saveConfig>true</saveConfig>
-              <icon>openrefine.ico</icon>
-              <downloadUrl>https://openrefine.org/docs/manual/installing#java</downloadUrl>
-              <classPath>
-                <mainClass>com.google.refine.Refine</mainClass>
-                <jarLocation>server/target/lib/</jarLocation>
-                <postCp>server/target/lib/*.jar</postCp>
-              </classPath>
-              <jre>
-                <path>%JAVA_HOME%;%PATH%</path>
-                <minVersion>${java.minversion}</minVersion>
-                <maxVersion>${java.maxversion}</maxVersion>
-                <bundledJreAsFallback>false</bundledJreAsFallback>
-                <initialHeapSize>512</initialHeapSize>
-                <maxHeapSize>2048</maxHeapSize>
-                <opts>
-                  <opt>-Djava.library.path=server/target/lib/native/windows</opt>
-                </opts>
-              </jre>
-              <versionInfo>
-                <fileVersion>${windows.fullversion}</fileVersion>
-                <txtFileVersion>${project.version}</txtFileVersion>
-                <fileDescription>openrefine</fileDescription>
-                <copyright>${windows.copyright.line}</copyright>
-                <productVersion>${windows.fullversion}</productVersion>
-                <txtProductVersion>${project.version}</txtProductVersion>
-                <productName>OpenRefine</productName>
-                <internalName>openrefine</internalName>
-                <originalFilename>openrefine.exe</originalFilename>
-              </versionInfo>
-            </configuration>
-          </execution>
           <execution>
             <id>l4j-clui-with-jre</id>
             <phase>package</phase>
@@ -529,92 +475,10 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.0</version>
+        <version>3.5.2</version>
         <configuration>
           <skip>true</skip>
         </configuration>
-      </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <version>${build-helper-maven-plugin.version}</version>
-        <inherited>false</inherited>
-        <executions>
-          <!-- Attach tar.gz artifact for linux -->
-          <execution>
-              <id>attach-linux</id>
-              <phase>deploy</phase>
-              <goals>
-                  <goal>attach-artifact</goal>
-              </goals>
-              <configuration>
-                  <artifacts>
-                      <artifact>
-                          <file>${project.build.directory}/${project.build.finalName}-linux-${project.version}.tar.gz</file>
-                          <type>tar.gz</type>
-                          <classifier>linux</classifier>
-                      </artifact>
-                  </artifacts>
-              </configuration>
-          </execution>
-
-          <!-- Attach the zip file for windows, without embedded JRE -->
-          <execution>
-              <id>attach-win-without-jre</id>
-              <phase>deploy</phase>
-              <goals>
-                  <goal>attach-artifact</goal>
-              </goals>
-              <configuration>
-                  <skipAttach>${skipCreateExe}</skipAttach>
-                  <artifacts>
-                      <artifact>
-                          <file>${project.build.directory}/${project.build.finalName}-win-${project.version}.zip</file>
-                          <type>zip</type>
-                          <classifier>win</classifier>
-                      </artifact>
-                  </artifacts>
-              </configuration>
-          </execution>
-
-          <!-- Attach the zip file for windows, with embedded JRE -->
-          <execution>
-              <id>attach-win-with-jre</id>
-              <phase>deploy</phase>
-              <goals>
-                  <goal>attach-artifact</goal>
-              </goals>
-              <configuration>
-                  <skipAttach>${skipCreateExe}</skipAttach>
-                  <artifacts>
-                      <artifact>
-                          <file>${project.build.directory}/${project.build.finalName}-win-with-java-${project.version}.zip</file>
-                          <type>zip</type>
-                          <classifier>win-with-java</classifier>
-                      </artifact>
-                  </artifacts>
-              </configuration>
-          </execution>
-
-          <!-- Attach the final DMG for MacOS -->
-          <execution>
-              <id>attach-dmg</id>
-              <phase>deploy</phase>
-              <goals>
-                  <goal>attach-artifact</goal>
-              </goals>
-              <configuration>
-                  <artifacts>
-                      <artifact>
-                          <file>${project.build.directory}/${project.build.finalName}-mac-${project.version}.dmg</file>
-                          <type>dmg</type>
-                          <classifier>mac</classifier>
-                      </artifact>
-                  </artifacts>
-              </configuration>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
     <pluginManagement>
@@ -651,7 +515,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-assembly-plugin</artifactId>
-          <version>3.4.2</version>
+          <version>3.7.1</version>
           <executions>
             <execution>
               <id>package-distributions</id>
@@ -677,7 +541,7 @@
                    https://stackoverflow.com/questions/53696439/appbundle-maven-plugin-fails-on-mac-osx-with-java-10 -->
               <groupId>org.codehaus.plexus</groupId>
               <artifactId>plexus-archiver</artifactId>
-              <version>4.6.1</version>
+              <version>4.10.0</version>
             </dependency>
             <dependency>
               <groupId>org.apache.velocity</groupId>
@@ -755,4 +619,3 @@
     </dependency>
   </dependencies>
 </project>
-

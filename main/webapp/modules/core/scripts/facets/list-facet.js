@@ -51,6 +51,10 @@ class ListFacet extends Facet {
     this._data = null;
 
     this._initialHeightSet = false;
+  };
+
+  prepareUI() {
+    Refine.showLeftPanel();
     this._initializeUI();
     this._update();
   };
@@ -101,8 +105,17 @@ class ListFacet extends Facet {
     (this._errorChoice !== null && this._errorChoice.s);
   };
 
-  updateState(data) {
+  uniquenessCriterion() {
+    return JSON.stringify([
+      "list",
+      this._config.columnName,
+      this._config.expression
+    ]);
+  }
+
+  updateState(data, column) {
     this._data = data;
+    this._column = column;
 
     if ("choices" in data) {
       var selection = [];
@@ -123,6 +136,23 @@ class ListFacet extends Facet {
     this._update();
   };
 
+  checkInitialHeight() {
+    if (this._elmts) {
+      let innerList = this._elmts.bodyInnerDiv[0];
+      if (!this._initialHeightSet && innerList.offsetHeight !== 0) {
+        let innerHeight = innerList.offsetHeight;
+        let defaultMaxHeight = 17 * 13;
+
+        if (innerHeight > defaultMaxHeight) {
+          this._elmts.bodyDiv.height(defaultMaxHeight + 'px');
+        } else {
+          this._elmts.bodyDiv.height((innerHeight + 1) + 'px');
+        }
+        this._initialHeightSet = true;
+      }
+    }
+  }
+
   _reSortChoices() {
     this._data.choices.sort(this._options.sort === "name" ?
         function(a, b) {
@@ -142,7 +172,7 @@ class ListFacet extends Facet {
 
     this._div.empty().show().html(
       '<div class="facet-title" bind="facetTitle">' +
-        '<div class="grid-layout layout-tightest layout-full"><table><tr>' +
+        '<div class="grid-layout layout-tightest layout-full"><table role="presentation"><tr>' +
           '<td width="1%">' +
             '<a href="javascript:{}" title="'+$.i18n('core-facets/remove-facet')+'" class="facet-title-remove" bind="removeButton">&nbsp;</a>' +
           '</td>' +
@@ -161,7 +191,7 @@ class ListFacet extends Facet {
       '<div class="facet-controls" bind="controlsDiv" style="display:none;">' +
         '<a bind="choiceCountContainer" class="action" href="javascript:{}"></a> ' +
         '<span class="facet-controls-sortControls" bind="sortGroup">'+$.i18n('core-facets/sort-by')+': ' +
-          '<a href="javascript:{}" bind="sortByNameLink">'+$.i18n('core-facets/name')+'</a>' +
+          '<a href="javascript:{}" bind="sortByNameLink">'+$.i18n('core-facets/name')+'</a> ' +
           '<a href="javascript:{}" bind="sortByCountLink">'+$.i18n('core-facets/count')+'</a>' +
         '</span>' +
         '<button bind="clusterLink" class="facet-controls-button button">'+$.i18n('core-facets/cluster')+'</button>' +
@@ -402,18 +432,7 @@ class ListFacet extends Facet {
     this._renderBodyControls();
     this._elmts.bodyInnerDiv[0].scrollTop = scrollTop;
 
-    if (!this._initialHeightSet) {
-      let innerList = this._elmts.bodyInnerDiv[0];
-      let innerHeight = innerList.clientHeight;
-      let defaultMaxHeight = 17 * 13;
-
-      if (innerHeight > defaultMaxHeight) {
-        this._elmts.bodyDiv.height(defaultMaxHeight + 'px');
-      } else {
-        this._elmts.bodyDiv.height((innerHeight + 1) + 'px');
-      }
-      this._initialHeightSet = true;
-    }
+    this.checkInitialHeight();
 
     var getChoice = function(elmt) {
       var index = parseInt(elmt.attr("choiceIndex"),10);
@@ -527,7 +546,7 @@ class ListFacet extends Facet {
   };
 
   _doEdit() {
-    new ClusteringDialog(this._config.columnName, this._config.expression);
+    new ClusteringDialog(this._column, this._config.expression);
   };
 
   _editChoice(choice, choiceDiv) {
@@ -564,8 +583,6 @@ class ListFacet extends Facet {
     var commit = function() {
       var text = elmts.textarea[0].value;
 
-      MenuSystem.dismissAll();
-
       var edit = { to : text };
       if (choice === self._blankChoice) {
         edit.fromBlank = true;
@@ -590,6 +607,7 @@ class ListFacet extends Facet {
         },
         {
           onDone: function(o) {
+            MenuSystem.dismissAll();
             var selection = [];
             var gotSelection = false;
             for (var i = 0; i < self._selection.length; i++) {

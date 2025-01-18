@@ -54,13 +54,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="3rdparty/jquery.i18n/languages/fi.js"></script>
     <script type="text/javascript" src="3rdparty/jquery.i18n/languages/ru.js"></script>
     <script type="text/javascript" src="scripts/util/i18n.js"></script>
+    <script type="text/javascript" src="scripts/util/csrf.js"></script>
     <script type="text/javascript" src="scripts/index.js"></script>
+    <script type="text/javascript" src="about.js"></script>
 
   </head>
   <body>
     <div id="header">
       <a id="app-home-button" href="./">
-        <img aria-hidden="true" src="images/logo-gem-126.png" width="30" />
+        <img aria-hidden="true" src="images/logo-gem-126.svg" width="30" />
         <h1>OpenRefine</h1>
       </a>
     </div>
@@ -70,6 +72,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <!-- The following two IDs must match those in index.vt/index.js -->
       <h2 id="openrefine-version"></h2>
       <h3 id="java-runtime-version"></h3>
+      <h3 id="openrefine-extensions"></h3>
       
       <p id="definition">
       </p>
@@ -77,7 +80,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <p id="history-openrefine">
       </p>
       
-      <table cellspacing="0" cellpadding="0"><tr>
+      <table role="presentation" cellspacing="0" cellpadding="0"><tr>
         <td width="300">
           <h2 id="contributors"></h2>
           <ul>
@@ -172,8 +175,8 @@ licenses/apache2.0.LICENSE.txt
     servlet-api
     xmlbeans
     signpost
-    opencsv
     textng
+    univocity-parsers
    
 LGPL
 ----

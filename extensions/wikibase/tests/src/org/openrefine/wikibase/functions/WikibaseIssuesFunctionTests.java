@@ -4,18 +4,15 @@ package org.openrefine.wikibase.functions;
 import static org.testng.Assert.assertEquals;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.Properties;
 
-import org.openrefine.wikibase.manifests.Manifest;
-import org.openrefine.wikibase.manifests.ManifestException;
-import org.openrefine.wikibase.manifests.ManifestParser;
-import org.openrefine.wikibase.schema.WikibaseSchema;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.refine.ProjectManager;
 import com.google.refine.RefineTest;
 import com.google.refine.expr.EvalError;
@@ -24,6 +21,11 @@ import com.google.refine.grel.ControlFunctionRegistry;
 import com.google.refine.model.Project;
 import com.google.refine.model.Row;
 import com.google.refine.util.ParsingUtilities;
+
+import org.openrefine.wikibase.manifests.Manifest;
+import org.openrefine.wikibase.manifests.ManifestException;
+import org.openrefine.wikibase.manifests.ManifestParser;
+import org.openrefine.wikibase.schema.WikibaseSchema;
 
 public class WikibaseIssuesFunctionTests extends RefineTest {
 
@@ -58,8 +60,12 @@ public class WikibaseIssuesFunctionTests extends RefineTest {
 
         schema = WikibaseSchema.reconstruct(schemaJson);
         manifest = ManifestParser.parse(manifestJson);
-        project = createCSVProject("my project",
-                "a,b\nc,d\ne,f");
+        project = createProject("my project",
+                new String[] { "a", "b" },
+                new Serializable[][] {
+                        { "c", "d" },
+                        { "e", "f" }
+                });
         project.overlayModels.put("wikibaseSchema", schema);
         ProjectManager.singleton.getPreferenceStore().put("wikibase.manifests", ParsingUtilities.mapper.readTree("[" + manifestJson + "]"));
         row = project.rows.get(0);

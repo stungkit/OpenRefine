@@ -17,10 +17,16 @@
   height: 100%;
 }
 
-#schema-alignment-tab {
-  overflow: hidden;
+.schema-alignment-tab-content {
+  max-width: 70em;
 }
 
+.serviceLogo-for-schema{
+  float: left !important;
+  width:19px;
+  height:20px;
+  }
+  
 .main-view-panel-tab-header {
   margin-top: 9px;
   margin-left: 7px;
@@ -44,12 +50,8 @@
 }
 
 .schema-alignment-dialog-canvas {
-  background: var(--background-primary);
   overflow-y: auto;
-}
-
-.schema-alignment-dialog-entity-edits-area {
-  max-width: 70em;
+  margin-bottom: 3em;
 }
 
 .schema-alignment-dialog-statements-area {
@@ -66,25 +68,32 @@
   margin: 1em;
 }
 
-.schema-alignment-save {
-  float: right;
+.schema-alignment-header {
+  position: sticky;
+  top: 0;
+  padding-top: 1em;
+  background-color: var(--background-primary);
+  z-index: 1;
+}
+
+.schema-alignment-header .panel-explanation:first-child {
+  margin-top: 0;
+}
+
+.schema-alignment-footer {
   padding: 1em;
 }
 
-.schema-alignment-save button:disabled {
-  color: gray;
-}
-
-.schema-alignment-save button {
-  font-weight: normal;
-  width: 100%;
+.schema-alignment-footer button:disabled {
+  color: grey;
+  cursor: not-allowed;
 }
 
 .schema-alignment-dialog-columns-area {
   border: 1px solid #bcf;
   border-left: 0;
   border-right: 0;
-  padding: 5px;
+  padding: 5px 1em;
   max-height: 100px;
   overflow-y: auto;
 }
@@ -136,7 +145,7 @@
 }
 
 .wbs-unvalidated-input {
-  border: 1px solid red !important;
+  border: 1px solid var(--error-red) !important;
   background-color: #ffbfbf;
 }
 
@@ -312,6 +321,8 @@ input[type="checkbox"].wbs-wikitext-override {
 .wbs-entity {
   margin-bottom: 5px;
   padding-right: 5px;
+  padding: 10px;
+  border-bottom: 1px solid #d3deff;
 }
 
 .wbs-statement-group {
@@ -567,24 +578,34 @@ tr.wb-warning:nth-of-type(odd) {
 }
 
 .wb-warning-severity-INFO {
-  background-image: url('../images/Information.png');
+  background-image: url('../images/Information.svg');
 }
 
 .wb-warning-severity-WARNING {
-  background-image: url('../images/Warning.png');
+  background-image: url('../images/Warning.svg');
 }
 
 .wb-warning-severity-IMPORTANT {
-  background-image: url('../images/Important.png');
+  background-image: url('../images/Important.svg');
 }
 
 .wb-warning-severity-CRITICAL {
-  background-image: url('../images/Critical.png');
+  background-image: url('../images/Critical.svg');
 }
 
 .wb-warning-body {
   padding: 5px;
   vertical-align: top;
+  line-height: 1.4;
+}
+
+.wb-warning-body-h1 {
+ display: inline-block;
+ margin-right: 8px;
+}
+
+.wb-warning-body-subtext {
+  opacity: 0.75;
 }
 
 .wb-warning-count {

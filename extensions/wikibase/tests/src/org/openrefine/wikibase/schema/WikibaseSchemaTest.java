@@ -34,6 +34,26 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+import org.wikidata.wdtk.datamodel.helpers.Datamodel;
+import org.wikidata.wdtk.datamodel.interfaces.Claim;
+import org.wikidata.wdtk.datamodel.interfaces.ItemIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.Snak;
+import org.wikidata.wdtk.datamodel.interfaces.SnakGroup;
+import org.wikidata.wdtk.datamodel.interfaces.Statement;
+import org.wikidata.wdtk.datamodel.interfaces.StatementRank;
+import org.wikidata.wdtk.datamodel.interfaces.StringValue;
+import org.wikidata.wdtk.datamodel.interfaces.TimeValue;
+import org.wikidata.wdtk.wikibaseapi.ApiConnection;
+
+import com.google.refine.browsing.Engine;
+import com.google.refine.browsing.EngineConfig;
+import com.google.refine.model.ColumnModel;
+import com.google.refine.model.Project;
+import com.google.refine.util.TestUtils;
+
 import org.openrefine.wikibase.schema.strategies.StatementEditingMode;
 import org.openrefine.wikibase.schema.strategies.StatementMerger;
 import org.openrefine.wikibase.schema.validation.PathElement;
@@ -46,17 +66,6 @@ import org.openrefine.wikibase.updates.EntityEdit;
 import org.openrefine.wikibase.updates.ItemEditBuilder;
 import org.openrefine.wikibase.updates.StatementEdit;
 import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-import org.wikidata.wdtk.datamodel.helpers.Datamodel;
-import org.wikidata.wdtk.datamodel.interfaces.*;
-import org.wikidata.wdtk.wikibaseapi.ApiConnection;
-
-import com.google.refine.browsing.Engine;
-import com.google.refine.browsing.EngineConfig;
-import com.google.refine.model.ColumnModel;
-import com.google.refine.model.Project;
-import com.google.refine.util.TestUtils;
 
 public class WikibaseSchemaTest extends WikidataRefineTest {
 
@@ -99,7 +108,8 @@ public class WikibaseSchemaTest extends WikidataRefineTest {
 
     @BeforeMethod
     public void setUpProject() {
-        project = this.createCSVProject(TestingData.inceptionCsv);
+        project = this.createProject(TestingData.inceptionColumns,
+                TestingData.inceptionProjectGrid);
         project.rows.get(0).cells.set(0, TestingData.makeMatchedCell("Q1377", "University of Ljubljana"));
         project.rows.get(1).cells.set(0, TestingData.makeMatchedCell("Q865528", "University of Warwick"));
     }
@@ -144,9 +154,9 @@ public class WikibaseSchemaTest extends WikidataRefineTest {
         Engine engine = new Engine(project);
         List<EntityEdit> updates = schema.evaluate(project, engine);
         List<EntityEdit> expected = new ArrayList<>();
-        TermedStatementEntityEdit update1 = new ItemEditBuilder(qid1).addStatement(statementUpdate1).build();
+        TermedStatementEntityEdit update1 = new ItemEditBuilder(qid1).addStatement(statementUpdate1).addContributingRowId(123).build();
         expected.add(update1);
-        TermedStatementEntityEdit update2 = new ItemEditBuilder(qid2).addStatement(statementUpdate2).build();
+        TermedStatementEntityEdit update2 = new ItemEditBuilder(qid2).addStatement(statementUpdate2).addContributingRowId(123).build();
         expected.add(update2);
         assertEquals(expected, updates);
     }
@@ -199,7 +209,7 @@ public class WikibaseSchemaTest extends WikidataRefineTest {
         assertTrue(validation.getValidationErrors().isEmpty());
 
         Engine engine = new Engine(project);
-        EngineConfig engineConfig = EngineConfig.reconstruct("{\n"
+        EngineConfig engineConfig = EngineConfig.deserialize("{\n"
                 + "      \"mode\": \"row-based\",\n"
                 + "      \"facets\": [\n"
                 + "        {\n"
@@ -216,7 +226,7 @@ public class WikibaseSchemaTest extends WikidataRefineTest {
         engine.initializeFromConfig(engineConfig);
         List<EntityEdit> updates = schema.evaluate(project, engine);
         List<EntityEdit> expected = new ArrayList<>();
-        EntityEdit update1 = new ItemEditBuilder(qid1).addStatement(statementUpdate1).build();
+        EntityEdit update1 = new ItemEditBuilder(qid1).addStatement(statementUpdate1).addContributingRowId(123).build();
         expected.add(update1);
         assertEquals(expected, updates);
     }

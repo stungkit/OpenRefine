@@ -8,10 +8,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.openrefine.wikibase.schema.strategies.PropertyOnlyStatementMerger;
-import org.openrefine.wikibase.schema.strategies.StatementEditingMode;
-import org.openrefine.wikibase.schema.strategies.StatementMerger;
-import org.openrefine.wikibase.testing.TestingData;
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.interfaces.Claim;
@@ -21,6 +17,11 @@ import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
 import org.wikidata.wdtk.datamodel.interfaces.PropertyIdValue;
 import org.wikidata.wdtk.datamodel.interfaces.Statement;
 import org.wikidata.wdtk.datamodel.interfaces.StatementRank;
+
+import org.openrefine.wikibase.schema.strategies.PropertyOnlyStatementMerger;
+import org.openrefine.wikibase.schema.strategies.StatementEditingMode;
+import org.openrefine.wikibase.schema.strategies.StatementMerger;
+import org.openrefine.wikibase.testing.TestingData;
 
 public class EntityEditTest {
 
@@ -44,14 +45,17 @@ public class EntityEditTest {
 
     @Test
     public void testGroupBySubject() {
-        TermedStatementEntityEdit updateA = new ItemEditBuilder(newSubject).addStatement(statementUpdate1).build();
-        TermedStatementEntityEdit updateB = new ItemEditBuilder(sameNewSubject).addStatement(statementUpdate2).build();
-        TermedStatementEntityEdit updateC = new ItemEditBuilder(existingSubject).addLabel(label, true).build();
-        TermedStatementEntityEdit updateD = new ItemEditBuilder(matchedSubject).build();
+        TermedStatementEntityEdit updateA = new ItemEditBuilder(newSubject).addStatement(statementUpdate1).addContributingRowId(123)
+                .build();
+        TermedStatementEntityEdit updateB = new ItemEditBuilder(sameNewSubject).addStatement(statementUpdate2).addContributingRowId(123)
+                .build();
+        TermedStatementEntityEdit updateC = new ItemEditBuilder(existingSubject).addLabel(label, true).addContributingRowId(123).build();
+        TermedStatementEntityEdit updateD = new ItemEditBuilder(matchedSubject).addContributingRowId(123).build();
         Map<EntityIdValue, EntityEdit> grouped = EntityEdit
                 .groupBySubject(Arrays.asList(updateA, updateB, updateC, updateD));
         TermedStatementEntityEdit mergedUpdate = new ItemEditBuilder(newSubject).addStatement(statementUpdate1)
                 .addStatement(statementUpdate2)
+                .addContributingRowId(123)
                 .build();
         Map<EntityIdValue, TermedStatementEntityEdit> expected = new HashMap<>();
         expected.put(newSubject, mergedUpdate);

@@ -24,20 +24,21 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.QAWarning;
-import org.openrefine.wikibase.updates.ItemEdit;
-import org.openrefine.wikibase.updates.MediaInfoEdit;
-import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
-import org.wikidata.wdtk.datamodel.interfaces.ItemDocument;
-import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
-import org.wikidata.wdtk.datamodel.interfaces.Statement;
-
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.io.File;
+
+import org.wikidata.wdtk.datamodel.interfaces.EntityIdValue;
+import org.wikidata.wdtk.datamodel.interfaces.ItemDocument;
+import org.wikidata.wdtk.datamodel.interfaces.MonolingualTextValue;
+import org.wikidata.wdtk.datamodel.interfaces.Statement;
+
+import org.openrefine.wikibase.qa.QAWarning;
+import org.openrefine.wikibase.updates.ItemEdit;
+import org.openrefine.wikibase.updates.MediaInfoEdit;
 
 /**
  * A scrutinizer that inspects new entities.
@@ -58,6 +59,7 @@ public class NewEntityScrutinizer extends EditScrutinizer {
     public static final String newMediaWithoutFileNameType = "new-media-without-file-name";
     public static final String newMediaWithoutWikitextType = "new-media-without-wikitext";
     public static final String newMediaType = "new-media-created";
+    public static final String newMediaChunkedUpload = "new-media-chunked-upload";
     public static final String invalidFilePathType = "invalid-file-path";
     // TODO add checks for bad file names (which are page titles): https://www.mediawiki.org/wiki/Help:Bad_title
     // https://commons.wikimedia.org/wiki/Commons:File_naming
@@ -97,6 +99,10 @@ public class NewEntityScrutinizer extends EditScrutinizer {
                     issue.setFacetable(false); // for now
                     issue.setProperty("example_path", update.getFilePath());
                     addIssue(issue);
+                }
+
+                if (update.shouldUploadInChunks()) {
+                    addIssue(newMediaChunkedUpload, null, QAWarning.Severity.WARNING, 1, false);
                 }
             }
 

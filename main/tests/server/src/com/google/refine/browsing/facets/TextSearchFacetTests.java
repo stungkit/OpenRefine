@@ -33,22 +33,26 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.google.refine.browsing.facets;
 
-import java.io.IOException;
+import static org.testng.Assert.assertEquals;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.Optional;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.google.refine.model.ModelException;
-import com.google.refine.model.Project;
 import com.google.refine.RefineTest;
 import com.google.refine.browsing.RowFilter;
-import com.google.refine.browsing.facets.TextSearchFacet;
 import com.google.refine.browsing.facets.TextSearchFacet.TextSearchFacetConfig;
+import com.google.refine.model.ModelException;
+import com.google.refine.model.Project;
 import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.TestUtils;
 
@@ -82,12 +86,14 @@ public class TextSearchFacetTests extends RefineTest {
 
     @BeforeMethod
     public void setUp() throws IOException, ModelException {
-        project = createCSVProject("TextSearchFacet",
-                "Value\n"
-                        + "a\n"
-                        + "b\n"
-                        + "ab\n"
-                        + "Abc\n");
+        project = createProject("TextSearchFacet",
+                new String[] { "Value" },
+                new Serializable[][] {
+                        { "a" },
+                        { "b" },
+                        { "ab" },
+                        { "Abc" }
+                });
     }
 
     private void configureFilter(String filter) throws JsonParseException, JsonMappingException, IOException {
@@ -204,5 +210,11 @@ public class TextSearchFacetTests extends RefineTest {
         TextSearchFacetConfig config = ParsingUtilities.mapper.readValue(sensitiveConfigJson, TextSearchFacetConfig.class);
         TextSearchFacet facet = config.apply(project);
         TestUtils.isSerializedTo(facet, sensitiveFacetJson);
+    }
+
+    @Test
+    public void testColumnDependencies() throws Exception {
+        TextSearchFacetConfig facetConfig = ParsingUtilities.mapper.readValue(sensitiveConfigJson, TextSearchFacetConfig.class);
+        assertEquals(facetConfig.getColumnDependencies(), Optional.of(Collections.singleton("Value")));
     }
 }

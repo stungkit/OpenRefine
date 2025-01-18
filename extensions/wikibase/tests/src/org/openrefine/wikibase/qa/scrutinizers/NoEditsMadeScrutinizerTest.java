@@ -24,9 +24,10 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
+import org.testng.annotations.Test;
+
 import org.openrefine.wikibase.testing.TestingData;
 import org.openrefine.wikibase.updates.ItemEditBuilder;
-import org.testng.annotations.Test;
 
 public class NoEditsMadeScrutinizerTest extends ScrutinizerTest {
 
@@ -43,13 +44,13 @@ public class NoEditsMadeScrutinizerTest extends ScrutinizerTest {
 
     @Test
     public void testNonNull() {
-        scrutinize(new ItemEditBuilder(TestingData.newIdA).build());
+        scrutinize(new ItemEditBuilder(TestingData.newIdA).addContributingRowId(123).build());
         assertNoWarningRaised();
     }
 
     @Test
     public void testNull() {
-        scrutinize(new ItemEditBuilder(TestingData.existingId).build());
+        scrutinize(new ItemEditBuilder(TestingData.existingId).addContributingRowId(123).build());
         assertWarningsRaised(NoEditsMadeScrutinizer.type);
     }
 }

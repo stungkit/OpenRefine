@@ -1,10 +1,12 @@
 
 package org.openrefine.wikibase.qa.scrutinizers;
 
-import org.openrefine.wikibase.qa.ConstraintFetcher;
-import org.openrefine.wikibase.testing.TestingData;
-import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
-import org.openrefine.wikibase.updates.ItemEditBuilder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.List;
+
 import org.testng.annotations.Test;
 import org.wikidata.wdtk.datamodel.helpers.Datamodel;
 import org.wikidata.wdtk.datamodel.implementation.StatementImpl;
@@ -16,11 +18,10 @@ import org.wikidata.wdtk.datamodel.interfaces.Statement;
 import org.wikidata.wdtk.datamodel.interfaces.Value;
 import org.wikidata.wdtk.datamodel.interfaces.ValueSnak;
 
-import java.util.Collections;
-import java.util.List;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.openrefine.wikibase.qa.ConstraintFetcher;
+import org.openrefine.wikibase.testing.TestingData;
+import org.openrefine.wikibase.updates.ItemEditBuilder;
+import org.openrefine.wikibase.updates.TermedStatementEntityEdit;
 
 public class EntityTypeScrutinizerTest extends StatementScrutinizerTest {
 
@@ -50,6 +51,7 @@ public class EntityTypeScrutinizerTest extends StatementScrutinizerTest {
 
         TermedStatementEntityEdit update = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak = Datamodel.makeValueSnak(itemParameterPID, allowedValue);
@@ -75,6 +77,7 @@ public class EntityTypeScrutinizerTest extends StatementScrutinizerTest {
 
         TermedStatementEntityEdit update = new ItemEditBuilder(idA)
                 .addStatement(add(statement))
+                .addContributingRowId(123)
                 .build();
 
         Snak qualifierSnak = Datamodel.makeValueSnak(itemParameterPID, itemValue);

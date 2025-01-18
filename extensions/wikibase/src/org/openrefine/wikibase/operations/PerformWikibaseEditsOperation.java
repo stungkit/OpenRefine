@@ -27,22 +27,26 @@ package org.openrefine.wikibase.operations;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Writer;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang.Validate;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.lang3.StringUtils;
-import org.openrefine.wikibase.commands.ConnectionManager;
-import org.openrefine.wikibase.editing.EditBatchProcessor;
-import org.openrefine.wikibase.editing.NewEntityLibrary;
-import org.openrefine.wikibase.manifests.Manifest;
-import org.openrefine.wikibase.schema.WikibaseSchema;
-import org.openrefine.wikibase.schema.validation.ValidationState;
-import org.openrefine.wikibase.updates.EntityEdit;
+import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wikidata.wdtk.util.WebResourceFetcherImpl;
@@ -50,19 +54,34 @@ import org.wikidata.wdtk.wikibaseapi.ApiConnection;
 import org.wikidata.wdtk.wikibaseapi.WikibaseDataEditor;
 import org.wikidata.wdtk.wikibaseapi.WikibaseDataFetcher;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.refine.RefineServlet;
 import com.google.refine.browsing.Engine;
 import com.google.refine.browsing.EngineConfig;
 import com.google.refine.history.Change;
 import com.google.refine.history.HistoryEntry;
+import com.google.refine.model.Cell;
+import com.google.refine.model.Column;
 import com.google.refine.model.Project;
+import com.google.refine.model.changes.CellAtRow;
+import com.google.refine.model.changes.CellChange;
+import com.google.refine.model.changes.ColumnAdditionChange;
+import com.google.refine.model.changes.MassCellChange;
+import com.google.refine.model.changes.MassChange;
 import com.google.refine.operations.EngineDependentOperation;
 import com.google.refine.process.LongRunningProcess;
 import com.google.refine.process.Process;
+import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.Pool;
+
+import org.openrefine.wikibase.commands.ConnectionManager;
+import org.openrefine.wikibase.editing.EditBatchProcessor;
+import org.openrefine.wikibase.editing.EditBatchProcessor.EditResult;
+import org.openrefine.wikibase.editing.EditResultsFormatter;
+import org.openrefine.wikibase.editing.NewEntityLibrary;
+import org.openrefine.wikibase.manifests.Manifest;
+import org.openrefine.wikibase.schema.WikibaseSchema;
+import org.openrefine.wikibase.schema.validation.ValidationState;
+import org.openrefine.wikibase.updates.EntityEdit;
 
 public class PerformWikibaseEditsOperation extends EngineDependentOperation {
 
@@ -87,6 +106,10 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
     @JsonProperty("tag")
     private String tagTemplate;
 
+    @JsonInclude(Include.NON_NULL)
+    @JsonProperty("resultsColumnName")
+    private String resultsColumnName;
+
     @JsonCreator
     public PerformWikibaseEditsOperation(
             @JsonProperty("engineConfig") EngineConfig engineConfig,
@@ -94,7 +117,8 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
             @JsonProperty("maxlag") Integer maxlag,
             @JsonProperty("editGroupsUrlSchema") String editGroupsUrlSchema,
             @JsonProperty("maxEditsPerMinute") Integer maxEditsPerMinute,
-            @JsonProperty("tag") String tag) {
+            @JsonProperty("tag") String tag,
+            @JsonProperty("resultsColumnName") String resultsColumnName) {
         super(engineConfig);
         Validate.notNull(summary, "An edit summary must be provided.");
         Validate.notEmpty(summary, "An edit summary must be provided.");
@@ -109,6 +133,8 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
         this.tagTemplate = tag == null ? Manifest.DEFAULT_TAG_TEMPLATE : tag;
         // a fallback to Wikidata for backwards compatibility is done later on
         this.editGroupsUrlSchema = editGroupsUrlSchema;
+        // if null, no column is created for error reporting
+        this.resultsColumnName = resultsColumnName;
     }
 
     @Override
@@ -127,6 +153,36 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
                 summary);
     }
 
+    /**
+     * @return the list of tags which we should attempt to add to our edits. The first existing tag in the list will be
+     *         used. If none of the returned tags exist, editing will happen without any tag.
+     */
+    @JsonIgnore
+    protected List<String> getTagCandidates(String refineVersion) {
+        List<String> results = new LinkedList<>();
+
+        if (tagTemplate.contains("${version}")) {
+            Pattern pattern = Pattern.compile("^(\\d+\\.\\d+).*$");
+            Matcher matcher = pattern.matcher(refineVersion);
+            if (matcher.matches()) {
+                results.add(tagTemplate.replace("${version}", matcher.group(1)));
+            }
+
+            // if the tag template includes the version, also add a version-independent tag as fallback.
+            // for instance, if the tag template is `openrefine-${version}`, also try adding the tag `openrefine`
+            // in case the version-specific tag isn't available.
+            // See https://github.com/OpenRefine/OpenRefine/issues/6551
+            if (tagTemplate.endsWith("-${version}")) {
+                results.add(tagTemplate.substring(0, tagTemplate.length() - "-${version}".length()));
+            }
+
+        } else {
+            results.add(tagTemplate);
+        }
+
+        return results;
+    }
+
     static public class PerformWikibaseEditsChange implements Change {
 
         private NewEntityLibrary newEntityLibrary;
@@ -137,14 +193,14 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
 
         @Override
         public void apply(Project project) {
-            // we don't re-run changes on Wikidata
+            // we don't re-run changes on Wikibase
             newEntityLibrary.updateReconciledCells(project, false);
         }
 
         @Override
         public void revert(Project project) {
             // this does not do anything on Wikibase side -
-            // (we don't revert changes on Wikidata either)
+            // (we don't revert changes on Wikibase either)
             newEntityLibrary.updateReconciledCells(project, true);
         }
 
@@ -154,6 +210,7 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
             if (newEntityLibrary != null) {
                 writer.write("newItems=");
                 ObjectMapper mapper = new ObjectMapper();
+                mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
                 writer.write(mapper.writeValueAsString(newEntityLibrary) + "\n");
             }
             writer.write("/ec/\n"); // end of change
@@ -185,8 +242,8 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
         protected WikibaseSchema _schema;
         protected String _editGroupsUrlSchema;
         protected String _summary;
-        protected List<String> _tags;
         protected final long _historyEntryID;
+        protected final List<JsonNode> onDone = new ArrayList<>();
 
         protected PerformEditsProcess(Project project, Engine engine, String description, String editGroupsUrlSchema, String summary) {
             super(description);
@@ -194,15 +251,6 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
             this._engine = engine;
             this._schema = (WikibaseSchema) project.overlayModels.get("wikibaseSchema");
             this._summary = summary;
-            String tag = tagTemplate;
-            if (tag.contains("${version}")) {
-                Pattern pattern = Pattern.compile("^(\\d+\\.\\d+).*$");
-                Matcher matcher = pattern.matcher(RefineServlet.VERSION);
-                if (matcher.matches()) {
-                    tag = tag.replace("${version}", matcher.group(1));
-                }
-            }
-            this._tags = tag.isEmpty() ? Collections.emptyList() : Collections.singletonList(tag);
             this._historyEntryID = HistoryEntry.allocateID();
             if (editGroupsUrlSchema == null &&
                     ApiConnection.URL_WIKIDATA_API.equals(_schema.getMediaWikiApiEndpoint())) {
@@ -218,6 +266,29 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
             if (!validation.getValidationErrors().isEmpty()) {
                 throw new IllegalStateException("Schema is incomplete");
             }
+
+            // add error reporting facet
+            if (resultsColumnName != null) {
+                JsonNode createFacetAction;
+                try {
+                    createFacetAction = ParsingUtilities.mapper.readTree("{\n" +
+                            "  \"action\" : \"createFacet\",\n" +
+                            "  \"facetConfig\" : {\n" +
+                            "  \"expression\" : \"grel:if(isError(value), 'failed edit', if(isBlank(value), 'no edit', 'successful edit'))\"\n"
+                            +
+                            "    },\n" +
+                            "    \"facetType\" : \"list\"\n" +
+                            " }");
+                    ObjectNode facetConfig = (ObjectNode) createFacetAction.get("facetConfig");
+                    facetConfig.put("columnName", resultsColumnName);
+                    facetConfig.put("name", resultsColumnName);
+                } catch (JsonProcessingException e) {
+                    throw new IllegalStateException(e);
+                }
+                onDone.add(createFacetAction);
+
+            }
+
         }
 
         @Override
@@ -253,13 +324,15 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
             // Prepare the edits
             NewEntityLibrary newEntityLibrary = new NewEntityLibrary();
             EditBatchProcessor processor = new EditBatchProcessor(fetcher, editor, connection, entityDocuments, newEntityLibrary, summary,
-                    maxlag, _tags, 50, maxEditsPerMinute);
+                    maxlag, getTagCandidates(RefineServlet.VERSION), 50, maxEditsPerMinute);
+            EditResultsFormatter resultsFormatter = new EditResultsFormatter(mediaWikiApiEndpoint);
 
             // Perform edits
             logger.info("Performing edits");
             while (processor.remainingEdits() > 0) {
                 try {
-                    processor.performEdit();
+                    EditResult result = processor.performEdit();
+                    resultsFormatter.add(result);
                 } catch (InterruptedException e) {
                     _canceled = true;
                 }
@@ -271,11 +344,39 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
 
             _progress = 100;
 
+            Change errorReportingChange = null;
+            logger.info("Storing editing results in: " + resultsColumnName);
+            if (resultsColumnName != null) {
+                Column resultsColumn = _project.columnModel.getColumnByName(resultsColumnName);
+                int resultsCellIndex = resultsColumn != null ? resultsColumn.getCellIndex() : -1;
+
+                List<CellAtRow> cells = resultsFormatter.toCells();
+
+                if (resultsCellIndex != -1) {
+                    // column already exists, we overwrite cells where we made edits
+                    CellChange[] cellChanges = new CellChange[cells.size()];
+                    int i = 0;
+                    for (CellAtRow errorCell : cells) {
+                        int rowId = errorCell.row;
+                        Cell oldCell = _project.rows.get(rowId).getCell(resultsCellIndex);
+                        cellChanges[i] = new CellChange(rowId, resultsCellIndex,
+                                oldCell, errorCell.cell);
+                        i++;
+                    }
+                    errorReportingChange = new MassCellChange(cellChanges, resultsColumnName, false);
+                } else {
+                    // column does not exist yet, let's create it.
+                    errorReportingChange = new ColumnAdditionChange(resultsColumnName, _project.columnModel.columns.size(), cells);
+                }
+            }
+
             if (!_canceled) {
-                Change change = new PerformWikibaseEditsChange(newEntityLibrary);
+                Change reconUpdateChange = new PerformWikibaseEditsChange(newEntityLibrary);
+                Change fullChange = errorReportingChange == null ? reconUpdateChange
+                        : new MassChange(Arrays.asList(reconUpdateChange, errorReportingChange), false);
 
                 HistoryEntry historyEntry = new HistoryEntry(_historyEntryID, _project, _description,
-                        PerformWikibaseEditsOperation.this, change);
+                        PerformWikibaseEditsOperation.this, fullChange);
 
                 _project.history.addEntry(historyEntry);
                 _project.processManager.onDoneProcess(this);
@@ -285,6 +386,11 @@ public class PerformWikibaseEditsOperation extends EngineDependentOperation {
         @Override
         protected Runnable getRunnable() {
             return this;
+        }
+
+        @JsonProperty("onDone")
+        public List<JsonNode> onDoneActions() {
+            return onDone;
         }
     }
 }

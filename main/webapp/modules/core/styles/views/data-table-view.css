@@ -108,6 +108,7 @@ div.viewpanel-pagesize span:first-of-type {
   padding: 0;
   font-size: 1.05em;
   border-collapse: separate;
+  width: max-content;
 }
 
 .data-table td, .data-table-header td, .data-table-header th {
@@ -117,6 +118,8 @@ div.viewpanel-pagesize span:first-of-type {
 .data-table td {
   border-bottom: 0.02rem dotted #ddd;
   border-right: 0.02rem solid #ddd;
+  position: relative;
+  max-width: 300px;
 }
 
 .data-table-header td, .data-table-header th {
@@ -132,11 +135,38 @@ th.column-header {
   position: sticky;
   top: 0;
   z-index: 1;
-  will-change: transform;
+}
+
+th.column-group-header {
+  position: relative;
 }
 
 th {
   text-align: left;
+}
+
+.column-header-title {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+th .column-header-resizer-left, th .column-header-resizer-right {
+  display: block;
+  position: absolute;
+  top: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: col-resize;
+  width: 6px;
+}
+
+th .column-header-resizer-left {
+  right: 0;
+}
+
+th .column-header-resizer-right {
+  left: 0;
 }
 
 table.data-header-table>tbody>tr>td {
@@ -159,7 +189,6 @@ table.data-table-header td.column-header, table.data-table-header th.column-head
 table.data-table td.column-header, table.data-table th.column-header {
   vertical-align: top;
   white-space: nowrap;
-  cursor: pointer;
   padding: 4px 6px 4px 4px;
   border-bottom: none;
   font-weight: bold;
@@ -172,33 +201,50 @@ table.data-table td.column-header, table.data-table th.column-header {
 }
 
 .column-header-name {
-  margin: 0 0 0 21px;
   padding: 4px 0 0 0;
-  display: block;
+  display: inline-block;
+  position: absolute;
 }
 
-a.column-header-menu {
-  float: left;
-  display: block;
+.column-header-menu {
+  display: inline-block;
   margin: 0 4px 0 0;
   width: 17px;
   height: 19px;
   background-image: url(../../images/menu-dropdown.png);
   background-repeat: no-repeat;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background-color: transparent;
 }
 
-a.column-header-menu:hover {
+.column-header-menu-expand {
+  transform: rotate(-0.25turn);
+}
+
+.column-header-menu:hover {
   background-position: -17px 0px;
-  text-decoration: none;
 }
 
+.container-of-logo-and-statsbar {
+  display: grid;
+  grid-template-columns: max-content auto;
+  width:100%;
+ }
+ 
 .column-header-recon-stats-bar {
-  margin-top: 10px;
-  height: 4px;
+  margin-top:4px;
+  height: 6px;
   background: #ddd;
   border: 1px solid #ccc;
   position: relative;
   width: 100%;
+}
+    
+.serviceLogo {
+  width: 19px;
+  height: 21px;
 }
 
 .column-header-recon-stats-matched {
@@ -216,29 +262,33 @@ a.column-header-menu:hover {
 div.data-table-cell-content {
   line-height: 1.2;
   color: #222;
-  position: relative;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 div.data-table-cell-content-numeric {
   text-align: right;
 }
 
-a.data-table-cell-edit {
+.data-table-cell-edit {
   position: absolute;
-  top: 0;
   right: 0;
-  display: block;
-  width: 25px;
-  height: 16px;
-  text-decoration: none;
-  background-image: url(../../images/edit-map.png);
-  background-repeat: no-repeat;
-  visibility: hidden;
+  top: 0;
+  opacity: 0;
+  color: var(--background-primary);
+  background-color: #8ae;
+  padding: 2px 3px;
+  border-radius: 3px;
+  font-weight: bold;
+  line-height: normal;
+  font-size: 100%;
+  border: none;
+  cursor: pointer;
 }
 
-a.data-table-cell-edit:hover {
-  background-position: -25px 0px;
+.data-table-cell-edit:hover
+.data-table-cell-edit:focus {
+  background-color: var(--link-secondary);
 }
 
 div.data-table-cell-content-numeric>a.data-table-cell-edit {
@@ -256,7 +306,7 @@ div.data-table-cell-content-numeric>a.data-table-cell-edit {
 }
 
 .data-table-error {
-  color: red;
+  color: var(--error-red);
 }
 
 div.data-table-recon-candidates {
@@ -279,16 +329,25 @@ a.data-table-recon-topic {
   margin: 0 0.5em;
 }
 
-a.data-table-recon-action, .data-table-recon-extra>a {
+a.data-table-recon-action, .data-table-recon-extra>a, .data-table-recon-visibility>a {
   text-decoration: none;
   color: var(--link-secondary);
 }
 
-a.data-table-recon-action, .data-table-recon-extra {
+.data-table-recon-visibility{
+  font-size: 0.8em;
+}
+.data-table-recon-extra,.data-table-recon-visibily {
+  display: inline;
+  margin: 3px 0 0;
+}
+
+a.data-table-recon-action{
   font-size: 0.8em;
   display: block;
   margin: 3px 0 0;
 }
+
 
 a.data-table-recon-match, a.data-table-recon-match-similar {
   position: absolute;
@@ -381,10 +440,6 @@ a.data-table-flag-off {
 .data-table-cell-editor-key {
   font-size: 0.8em;
   color: var(--light-grey);
-}
-
-.set-httpheaders-container {
-  display: none;
 }
 
 .set-httpheaders-container label {

@@ -27,34 +27,34 @@
 
 package com.google.refine.operations.recon;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.refine.model.Project;
-import com.google.refine.model.Recon;
-import com.google.refine.model.recon.ReconConfig;
-import com.google.refine.model.recon.StandardReconConfig;
+import static org.testng.Assert.assertEquals;
+
+import java.io.Serializable;
+import java.util.Collections;
+
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.Test;
 
 import com.google.refine.RefineTest;
+import com.google.refine.model.Project;
+import com.google.refine.model.Recon;
+import com.google.refine.model.recon.StandardReconConfig;
+import com.google.refine.operations.OperationDescription;
 import com.google.refine.operations.OperationRegistry;
 import com.google.refine.util.ParsingUtilities;
 import com.google.refine.util.TestUtils;
 
-import java.util.Collections;
-import java.util.Properties;
-
-import static org.mockito.Mockito.mock;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNull;
-
 public class ReconMarkNewTopicsOperationTests extends RefineTest {
+
+    String description = OperationDescription.recon_mark_new_topics_shared_brief("my column");
 
     String jsonWithoutService = "{"
             + "\"op\":\"core/recon-mark-new-topics\","
             + "\"engineConfig\":{\"mode\":\"row-based\",\"facets\":[]},"
             + "\"columnName\":\"my column\","
             + "\"shareNewTopics\":true,"
-            + "\"description\":\"Mark to create new items for cells in column my column, one item for each group of similar cells\""
+            + "\"description\":" + new TextNode(description).toString()
             + "}";
 
     String jsonWithService = "{"
@@ -62,7 +62,7 @@ public class ReconMarkNewTopicsOperationTests extends RefineTest {
             + "\"engineConfig\":{\"mode\":\"row-based\",\"facets\":[]},"
             + "\"columnName\":\"my column\","
             + "\"shareNewTopics\":true,"
-            + "\"description\":\"Mark to create new items for cells in column my column, one item for each group of similar cells\","
+            + "\"description\":" + new TextNode(description).toString() + ","
             + "\"service\":\"http://foo.com/api\","
             + "\"identifierSpace\":\"http://foo.com/identifierSpace\","
             + "\"schemaSpace\":\"http://foo.com/schemaSpace\""
@@ -86,11 +86,15 @@ public class ReconMarkNewTopicsOperationTests extends RefineTest {
 
     @Test
     public void testNotPreviouslyReconciled() throws Exception {
-        Project project = createCSVProject("my column\n"
-                + "hello\n"
-                + "world");
+        Project project = createProject(
+                new String[] { "my column" },
+                new Serializable[][] {
+                        { "hello" },
+                        { "world" }
+                });
         ReconMarkNewTopicsOperation op = ParsingUtilities.mapper.readValue(jsonWithService, ReconMarkNewTopicsOperation.class);
-        op.createProcess(project, new Properties()).performImmediate();
+
+        runOperation(op, project);
 
         assertEquals(project.rows.get(0).cells.get(0).recon.judgment, Recon.Judgment.New);
         assertEquals(project.rows.get(1).cells.get(0).recon.judgment, Recon.Judgment.New);
@@ -102,9 +106,12 @@ public class ReconMarkNewTopicsOperationTests extends RefineTest {
 
     @Test
     public void testPreviouslyReconciled() throws Exception {
-        Project project = createCSVProject("my column\n"
-                + "hello\n"
-                + "world");
+        Project project = createProject(
+                new String[] { "my column" },
+                new Serializable[][] {
+                        { "hello" },
+                        { "world" }
+                });
         StandardReconConfig reconConfig = new StandardReconConfig(
                 "http://foo.com/api",
                 "http://foo.com/identifierSpace",
@@ -117,7 +124,8 @@ public class ReconMarkNewTopicsOperationTests extends RefineTest {
         project.columnModel.columns.get(0).setReconConfig(reconConfig);
 
         ReconMarkNewTopicsOperation op = ParsingUtilities.mapper.readValue(jsonWithoutService, ReconMarkNewTopicsOperation.class);
-        op.createProcess(project, new Properties()).performImmediate();
+
+        runOperation(op, project);
 
         assertEquals(project.rows.get(0).cells.get(0).recon.judgment, Recon.Judgment.New);
         assertEquals(project.rows.get(1).cells.get(0).recon.judgment, Recon.Judgment.New);

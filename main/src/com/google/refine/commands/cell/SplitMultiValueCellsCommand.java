@@ -41,6 +41,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import com.google.refine.commands.Command;
 import com.google.refine.model.AbstractOperation;
 import com.google.refine.model.Project;
@@ -85,6 +86,7 @@ public class SplitMultiValueCellsCommand extends Command {
                         separator,
                         regex);
             }
+            op.validate();
             Process process = op.createProcess(project, new Properties());
             performProcessAndRespond(request, response, project, process);
         } catch (Exception e) {

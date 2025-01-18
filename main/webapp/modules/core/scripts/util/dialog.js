@@ -63,7 +63,7 @@ DialogSystem.showDialog = function(elmt, onCancel) {
   container.css("top", Math.round((top < 0 ) ? 5 : top) + "px");
   elmt.css("visibility", "visible");
 
-  container.draggable({ handle: '.dialog-header', cursor: 'move' });
+  container.draggable({ handle: '.dialog-header', containment: [ -32768, 0, 32768, 32768 ], cursor: 'move' });
 
   var layer = {
     overlay: overlay,
@@ -76,14 +76,14 @@ DialogSystem.showDialog = function(elmt, onCancel) {
 
   DialogSystem.setupEscapeKeyHandling();
 
-  elmt.attr("aria-role", "dialog");
+  elmt.attr("role", "dialog");
   var dialogHeader = elmt.find(".dialog-header");
   if (dialogHeader.length && dialogHeader[0].id) {
     elmt.attr("aria-labeledby", dialogHeader[0].id);
   }
 
   elmt.attr("tabindex", -1);
-  elmt.focus();
+  elmt.trigger('focus');
 
   return level;
 };
@@ -147,4 +147,55 @@ DialogSystem.showBusy = function(message) {
     DialogSystem.dismissUntil(level - 1);
   };
 };
+
+DialogSystem.alert = function (error) {
+
+    let errorMessage = '';
+    if (typeof error === 'object') {
+        try {
+            errorMessage = JSON.stringify(error, null, 4); // Indent with 4 spaces for readability
+        } catch (e) {
+            errorMessage = $.i18n('core-dialogs/could-not-stringify');
+        }
+    } else {
+        errorMessage = error;
+    }
+    errorMessage = errorMessage.replace(/\r\n/g, "\n");
+
+    let frame = DialogSystem.createDialog();
+    frame.css("max-width", "50em")
+    let header = $('<div></div>')
+            .addClass("dialog-header")
+            .append($('<span>', {
+                'class': 'ui-icon ui-icon-alert',
+                'style': 'float:left; margin:0 7px 5px 0;'
+            }))
+            .append(document.createTextNode($.i18n('core-dialogs/error')))
+            .appendTo(frame);
+    let body = $('<div></div>').addClass("dialog-body").appendTo(frame);
+    let footer = $('<div></div>').addClass("dialog-footer").appendTo(frame);
+
+    let errorContent;
+    if (typeof errorMessage === 'string' && !errorMessage.includes('\n')) {
+        errorContent = $('<div>').text(errorMessage);
+    } else {
+        errorContent = $('<pre>').css({
+            'white-space': 'pre-wrap',
+            'word-break': 'break-all'
+        }).text(errorMessage);
+    }
+    body.append($('<p>')).append(errorContent);
+
+    let okButton = $('<button></button>').html($.i18n('core-buttons/ok')).on({
+        'click': () => {
+            DialogSystem.dismissUntil(this._level - 1);
+        }
+    }).css({
+        'float': 'right',
+        'margin': '5px'
+    });
+    footer.append(okButton);
+
+    this._level = DialogSystem.showDialog(frame);
+}
 

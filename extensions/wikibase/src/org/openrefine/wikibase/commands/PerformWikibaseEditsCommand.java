@@ -26,12 +26,12 @@ package org.openrefine.wikibase.commands;
 
 import javax.servlet.http.HttpServletRequest;
 
-import org.openrefine.wikibase.operations.PerformWikibaseEditsOperation;
-
 import com.google.refine.browsing.EngineConfig;
 import com.google.refine.commands.EngineDependentCommand;
 import com.google.refine.model.AbstractOperation;
 import com.google.refine.model.Project;
+
+import org.openrefine.wikibase.operations.PerformWikibaseEditsOperation;
 
 public class PerformWikibaseEditsCommand extends EngineDependentCommand {
 
@@ -45,7 +45,9 @@ public class PerformWikibaseEditsCommand extends EngineDependentCommand {
         Integer maxEditsPerMinute = maxEditsPerMinuteStr == null ? null : Integer.parseInt(maxEditsPerMinuteStr);
         String tag = request.getParameter("tag");
         String editGroupsUrlSchema = request.getParameter("editGroupsUrlSchema");
-        return new PerformWikibaseEditsOperation(engineConfig, summary, maxlag, editGroupsUrlSchema, maxEditsPerMinute, tag);
+        String resultsColumnName = request.getParameter("resultsColumnName");
+        return new PerformWikibaseEditsOperation(engineConfig, summary, maxlag, editGroupsUrlSchema, maxEditsPerMinute, tag,
+                resultsColumnName);
     }
 
 }
